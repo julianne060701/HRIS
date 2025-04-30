@@ -339,12 +339,12 @@ return [
             'icon' => 'fas fa-fw fa-lock',
         ],
         [
-            'text' => 'multilevel',
+            'text' => 'Manage Employee',
             'icon' => 'fas fa-fw fa-share',
             'submenu' => [
                 [
-                    'text' => 'level_one',
-                    'url' => '#',
+                    'text' => 'Add Employee',
+                    'url' => 'HR/employee',
                 ],
                 [
                     'text' => 'level_one',

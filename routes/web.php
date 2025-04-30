@@ -22,3 +22,7 @@ require __DIR__.'/auth.php';
 Auth::routes();
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
+
+// HR Routes
+
+Route::get('/HR/employee', [App\Http\Controllers\HR\EmployeeController::class, 'index'])->name('hr.employee');
