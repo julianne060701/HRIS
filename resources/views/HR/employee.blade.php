@@ -13,7 +13,7 @@
 <div class="container-fluid">
 
     <div class="d-flex justify-content-end mb-3">
-       
+    <a href="{{ route('hr.create_employee') }}" class="btn btn-primary px-5">Upload PR</a>
     </div>
 
     <div class="row">

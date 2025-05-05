@@ -26,3 +26,4 @@ Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name
 // HR Routes
 
 Route::get('/HR/employee', [App\Http\Controllers\HR\EmployeeController::class, 'index'])->name('hr.employee');
+Route::get('/HR/create_employee', [App\Http\Controllers\HR\EmployeeController::class, 'create'])->name('hr.create_employee');

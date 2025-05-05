@@ -22,6 +22,6 @@ yarn-error.log
 /.vscode
 /.zed
 
-# Composer and package lock files
+# Composer and package lock files 
 /composer.lock
 /package-lock.json
