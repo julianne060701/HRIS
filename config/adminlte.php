@@ -321,10 +321,9 @@ return [
             'can' => 'manage-blog',
         ],
         [
-            'text' => 'pages',
-            'url' => 'admin/pages',
+            'text' => 'Home',
+            'url' => 'home',
             'icon' => 'far fa-fw fa-file',
-            'label' => 4,
             'label_color' => 'success',
         ],
         ['header' => 'account_settings'],
@@ -334,64 +333,79 @@ return [
             'icon' => 'fas fa-fw fa-user',
         ],
         [
-            'text' => 'change_password',
-            'url' => 'admin/settings',
-            'icon' => 'fas fa-fw fa-lock',
-        ],
-        [
             'text' => 'Manage Employee',
-            'icon' => 'fas fa-fw fa-share',
+            'icon' => 'fas fa-fw fa-users-cog',
             'submenu' => [
                 [
-                    'text' => 'Add Employee',
-                    'url' => 'HR/employee',
+                    'text' => 'Employee List',
+                    'url'  => 'HR/manage_employee/employee',
+                    'icon' => 'fas fa-fw fa-list',
                 ],
                 [
-                    'text' => 'level_one',
-                    'url' => '#',
-                    'submenu' => [
-                        [
-                            'text' => 'level_two',
-                            'url' => '#',
-                        ],
-                        [
-                            'text' => 'level_two',
-                            'url' => '#',
-                            'submenu' => [
-                                [
-                                    'text' => 'level_three',
-                                    'url' => '#',
-                                ],
-                                [
-                                    'text' => 'level_three',
-                                    'url' => '#',
-                                ],
-                            ],
-                        ],
-                    ],
+                    'text' => 'Add New Employee',
+                    'url'  => 'HR/manage_employee/create_employee',
+                    'icon' => 'fas fa-fw fa-user-plus',
                 ],
                 [
-                    'text' => 'level_one',
-                    'url' => '#',
+                    'text' => 'Employee Attendance',
+                    'url'  => 'HR/manage_employee/attendance',
+                    'icon' => 'fas fa-fw fa-calendar-check',
+                ],
+                [
+                    'text' => 'Leaves & Absences',
+                    'url'  => 'leaves/index',
+                    'icon' => 'fas fa-fw fa-calendar-times',
+                ],
+                [
+                    'text' => 'Overtime Requests',
+                    'url'  => 'overtime/index',
+                    'icon' => 'fas fa-fw fa-clock',
+                ],
+                [
+                    'text' => 'Salary Details',
+                    'url'  => 'salary/index',
+                    'icon' => 'fas fa-fw fa-coins',
+                ],
+                [
+                    'text' => 'Deductions & Benefits',
+                    'url'  => 'deductions/index',
+                    'icon' => 'fas fa-fw fa-hand-holding-usd',
+                ],
+                [
+                    'text' => 'Employment Status',
+                    'url'  => 'employment/status',
+                    'icon' => 'fas fa-fw fa-briefcase',
                 ],
             ],
         ],
-        ['header' => 'labels'],
+        
         [
-            'text' => 'important',
-            'icon_color' => 'red',
-            'url' => '#',
+            'text' => 'Payroll System',
+            'icon' => 'fas fa-fw fa-money-check-alt',
+            'submenu' => [
+                [
+                    'text' => 'Payroll',
+                    'url'  => 'HR/payroll/add_payroll',
+                ],
+                [
+                    'text' => 'Generate Payslip',
+                    'url'  => 'HR/payroll/generate',
+                ],
+                [
+                    'text' => 'Deductions',
+                    'url'  => 'payroll/deductions',
+                ],
+                [
+                    'text' => 'Salary Rates',
+                    'url'  => 'payroll/salary-rates',
+                ],
+                [
+                    'text' => 'Payroll Reports',
+                    'url'  => 'payroll/reports',
+                ],
+            ],
         ],
-        [
-            'text' => 'warning',
-            'icon_color' => 'yellow',
-            'url' => '#',
-        ],
-        [
-            'text' => 'information',
-            'icon_color' => 'cyan',
-            'url' => '#',
-        ],
+        
     ],
 
     /*
