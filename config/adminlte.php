@@ -405,7 +405,35 @@ return [
                 ],
             ],
         ],
-        
+        [
+            'text' => 'Attendance',
+            'icon' => 'fas fa-fw fa-money-check-alt',
+            'submenu' => [
+                [
+                    'text' => 'Import DTR',
+                    'url'  => 'HR/attendance/importdtr',
+                ],
+                [
+                    'text' => 'Process DTR',
+                    'url'  => 'HR/payroll/generate',
+                ],
+                [
+                    'text' => 'Schedule',
+                    'url'  => 'payroll/deductions',
+                    'submenu' => [
+                    [
+                        'text' => 'Plot Schedule',
+                        'url'=> 'HR/payroll/generate',
+                    ],
+                    [
+                        'text' => 'Create New Schedule',
+                        'url'=> '',
+                    ]
+                ],
+                ]
+                
+            ],
+        ],
     ],
 
     /*

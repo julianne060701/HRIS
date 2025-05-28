@@ -3,6 +3,8 @@
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\HR\EmployeeController;
+use App\Http\Controllers\payroll\Attendance;
+
 Route::get('/', function () {
     return view('welcome');
 });
@@ -19,7 +21,7 @@ Route::middleware('auth')->group(function () {
 
 require __DIR__.'/auth.php';
 
-Auth::routes();
+// Auth::routes();
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
 
@@ -50,3 +52,8 @@ Route::post('/HR/payroll/store', [App\Http\Controllers\Payroll\AddPayrollControl
 //     Route::get('/employee/{id}/edit', [EmployeeController::class, 'edit'])->name('edit_employee');
 //     Route::put('/employee/{id}', [EmployeeController::class, 'update'])->name('update_employee');
 // });
+
+// Attendance Routes.
+Route::get('HR/attendance/importdtr', [App\Http\Controllers\Payroll\Attendance::class, 'index'])->name('HR.attendance.importdtr');
+Route::get('/attendance/data', [App\Http\Controllers\Payroll\Attendance::class,'getAttendanceData']);
+
