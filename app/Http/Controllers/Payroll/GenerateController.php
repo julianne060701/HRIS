@@ -19,7 +19,8 @@ class GenerateController extends Controller
         $employees = Employee::all();
 
         // Fetch all payrolls (adjust based on your data structure)
-        $payrolls = Payroll::all();
+        $payrolls = Payroll::pluck('payroll_code'); // ✅ fetches only the payroll_code column
+
 
         // Assuming earnings and deductions are related to the payroll and employee
         $earnings = Earning::all(); // Fetch all earnings (you can adjust this based on your data structure)
