@@ -13,6 +13,7 @@ class Attendance extends Controller
      */
     public function index()
     {
+        
         return view('hr.attendance.importdtr');
     }
 
