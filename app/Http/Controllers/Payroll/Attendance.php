@@ -38,15 +38,18 @@ class Attendance extends Controller
 
     public function getAttendanceData()
     {
-        $data = DB::table('attendance')
-            ->select(
-                'emp_id',
-                DB::raw("CONCAT(transindate, ' ', time_in) as time_in_full"),
-                DB::raw("CONCAT(transoutdate, ' ', time_out) as time_out_full")
-            )
-            ->get();
+        $data = DB::connection('biometrics')
+        ->table('attendance')
+        ->select(
+            'emp_id as employee_id',
+            DB::raw("'' as name"), // Placeholder if no name field
+            'transindate as transdate',
+            DB::raw("CONCAT(transindate, ' ', time_in) as time_in_full"),
+            DB::raw("CONCAT(transoutdate, ' ', time_out) as time_out_full")
+        )
+        ->get();
 
-        return response()->json(['data' => $data]);
+    return response()->json(['data' => $data]);
     }
 
 
