@@ -5,7 +5,7 @@
 @section('content')
     <div class="card">
         <div class="card-body">
-            
+            <button id="cutoff_btn" class="btn btn-primary mb-3">Get Cutoff Dates</button>
 
             <div class="mb-3">
                 <label for="minDate">From:</label>
@@ -15,18 +15,21 @@
             </div>
            
 
+
             <table id="schedulepost" class="table table-bordered table-hover mt-3">
                 <thead>
                     <tr id="schedule-header">
                         <th>Name</th>
-                        
+                    </tr>
+                    <tr>
+                    <td>210033</td>
                     </tr>
                 </thead>
                 <tbody></tbody>
             </table>
 
             <button id="pstschd_btn" class="btn btn-primary mt-3">POST SCHEDULE</button>
-            <button id="cutoff_btn" class="btn btn-primary mb-3">Get Cutoff Dates</button>
+            
         </div>
     </div>
 
@@ -50,19 +53,38 @@ document.addEventListener('DOMContentLoaded', function () {
                     minDate.value = data.start_date;
                     maxDate.value = data.end_date;
 
-                    // Now fetch schedule data based on these dates
+                    const start = new Date(data.start_date);
+                    const end = new Date(data.end_date);
+                    const headerRow = document.getElementById('schedule-header');
+                    headerRow.innerHTML = `<th>Name</th>`;
+
+                    const dateArray = [];
+                    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                        const current = new Date(d);
+                        const formatted = current.toISOString().split('T')[0];
+                        const weekday = current.toLocaleDateString('en-US', { weekday: 'short' });
+
+                        dateArray.push(formatted);
+                        const th = document.createElement('th');
+                        th.textContent = `${formatted} (${weekday})`;
+                        headerRow.appendChild(th);
+                    }
+
                     fetch(`/schedule/data?from=${data.start_date}&to=${data.end_date}`)
                         .then(res => res.json())
                         .then(scheduleData => {
                             const tbody = document.querySelector('#schedulepost tbody');
-                            tbody.innerHTML = ''; // Clear old rows
+                            tbody.innerHTML = '';
 
                             scheduleData.forEach(row => {
                                 const tr = document.createElement('tr');
-                                tr.innerHTML = `
-                                    <td>${row.name}</td>
-                                    <!-- Add more cells here as needed -->
-                                `;
+                                tr.innerHTML = `<td>${row.name}</td>`;
+
+                                dateArray.forEach(date => {
+                                    const shift = row.shifts?.[date] || '';
+                                    tr.innerHTML += `<td>${shift}</td>`; // show shift code
+                                });
+
                                 tbody.appendChild(tr);
                             });
                         });
@@ -73,5 +95,7 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     });
 });
+
+
 </script>
-@endsection
+@stop

@@ -57,10 +57,17 @@ Route::post('/HR/payroll/store', [App\Http\Controllers\Payroll\AddPayrollControl
 
 // Attendance Routes.
 Route::get('HR/attendance/importdtr', [App\Http\Controllers\Payroll\Attendance::class, 'index'])->name('HR.attendance.importdtr');
+
+
+//route of posting schedule
 Route::get('/attendance/data', [App\Http\Controllers\Payroll\Attendance::class,'getAttendanceData']);
 Route::get('/HR/attendance/postsched', [App\Http\Controllers\Payroll\postschedulecontroller::class,'index'])->name('HR.attendance.postsched');
 Route::post('/schedule/store', [App\Http\Controllers\Payroll\postschedulecontroller::class,'store'])->name('schedule.store');
 Route::get('/cutoff-dates', [App\Http\Controllers\Payroll\AddPayrollController::class, 'getCurrentCutoff'])->name('cutoff.dates');
 Route::get('/schedule/data', [App\Http\Controllers\Payroll\postschedulecontroller::class, 'getScheduleData']);
 
+
+//route of create sched
+Route::get('HR/attendance/create_sched', [App\Http\Controllers\Payroll\crtschedController::class, 'index'])->name('HR.attendance.create_sched');
+Route::post('/schedule/store', [App\Http\Controllers\Payroll\crtschedController::class,'store'])->name('schedule.store');
 

@@ -427,7 +427,7 @@ return [
                     ],
                     [
                         'text' => 'Create New Schedule',
-                        'url'=> '',
+                        'url'=> 'HR/attendance/create_sched',
                     ]
                 ],
                 ]
