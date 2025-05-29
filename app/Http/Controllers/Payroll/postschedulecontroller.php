@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Payroll;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\SchedPost;
+use App\Models\Schedule; 
 
 class postschedulecontroller extends Controller
 {
@@ -29,7 +30,7 @@ class postschedulecontroller extends Controller
      */
     public function store(Request $request)
     {
-        $schedule = new schedPost();
+        $schedule = new SchedPost();
         $schedule->start_date = $request->start_date;
         $schedule->end_date = $request->end_date;
         $schedule->save();
@@ -73,16 +74,22 @@ class postschedulecontroller extends Controller
     $from = $request->query('from');
     $to = $request->query('to');
 
-    $schedules = schedPost::whereBetween('start_date', [$from, $to])->get();
+    $schedules = Schedule::with('employee') // make sure you have this relation
+                ->whereBetween('date', [$from, $to])
+                ->get();
 
-    // You can customize this mapping
-    return response()->json($schedules->map(function ($sched) {
-        return [
-            'name' => 'Sample Name', // Replace with actual logic
-            'start_date' => $sched->start_date,
-            'end_date' => $sched->end_date,
-        ];
-    }));
+    $grouped = [];
+
+    foreach ($schedules as $sched) {
+        $name = $sched->employee->name ?? 'Unknown';
+        $date = $sched->date;
+        $grouped[$name]['name'] = $name;
+        $grouped[$name]['shifts'][$date] = $sched->shift ?? ''; // only shift code is stored
+    }
+
+    return response()->json(array_values($grouped));
 }
+
+
 
 }

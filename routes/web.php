@@ -57,6 +57,9 @@ Route::post('/HR/payroll/store', [App\Http\Controllers\Payroll\AddPayrollControl
 
 // Attendance Routes.
 Route::get('HR/attendance/importdtr', [App\Http\Controllers\Payroll\Attendance::class, 'index'])->name('HR.attendance.importdtr');
+
+
+//route of posting schedule
 Route::get('/attendance/data', [App\Http\Controllers\Payroll\Attendance::class,'getAttendanceData']);
 Route::get('/HR/attendance/postsched', [App\Http\Controllers\Payroll\postschedulecontroller::class,'index'])->name('HR.attendance.postsched');
 Route::post('/schedule/store', [App\Http\Controllers\Payroll\postschedulecontroller::class,'store'])->name('schedule.store');
