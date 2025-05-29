@@ -113,4 +113,20 @@ class AddPayrollController extends Controller
     {
         //
     }
+    public function getCurrentCutoff()
+{
+    $latestPayroll = Payroll::latest('created_at')->first(); // or use ->orderBy('id', 'desc')
+
+    if (!$latestPayroll) {
+        return response()->json(['error' => 'No payroll data found'], 404);
+    }
+
+    return response()->json([
+        'start_date' => $latestPayroll->from_date,
+        'end_date'   => $latestPayroll->to_date,
+    ]);
+}
+
+
+
 }

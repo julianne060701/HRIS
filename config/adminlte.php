@@ -423,7 +423,7 @@ return [
                     'submenu' => [
                     [
                         'text' => 'Plot Schedule',
-                        'url'=> 'HR/payroll/generate',
+                        'url'=> 'HR/attendance/postsched',
                     ],
                     [
                         'text' => 'Create New Schedule',
