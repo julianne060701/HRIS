@@ -412,26 +412,41 @@ return [
                 [
                     'text' => 'Import DTR',
                     'url'  => 'HR/attendance/importdtr',
+                    'icon' => 'fas fa-fingerprint',
                 ],
                 [
                     'text' => 'Process DTR',
                     'url'  => 'HR/payroll/generate',
+                    'icon' => 'fas fa-cogs',
                 ],
                 [
                     'text' => 'Schedule',
                     'url'  => 'payroll/deductions',
+                    'icon' => 'fas fa-calendar-alt',
                     'submenu' => [
-                    [
-                        'text' => 'Plot Schedule',
-                        'url'=> 'HR/attendance/postsched',
+                        [
+                            'text' => 'Plot Schedule',
+                            'url'  => 'HR/attendance/postsched',
+                            'icon' => 'fas fa-map-marked-alt',
+                        ],
+                        [
+                            'text' => 'Create New Schedule',
+                            'url'  => '',
+                            'icon' => 'fas fa-plus-square',
+                        ],
                     ],
-                    [
-                        'text' => 'Create New Schedule',
-                        'url'=> '',
-                    ]
                 ],
-                ]
-                
+            ],
+        ],
+        
+        [
+            'text' => 'Holidays',
+            'icon' => 'fas fa-calendar-alt',
+            'submenu' => [
+                [
+                    'text' => 'Holiday List',
+                    'url'  => 'HR/holidays/index',
+                ],              
             ],
         ],
     ],

@@ -64,3 +64,6 @@ Route::get('/cutoff-dates', [App\Http\Controllers\Payroll\AddPayrollController::
 Route::get('/schedule/data', [App\Http\Controllers\Payroll\postschedulecontroller::class, 'getScheduleData']);
 
 
+// Holiday Routes
+Route::get('HR/holidays/index', [App\Http\Controllers\Holiday\HolidayController::class, 'index'])->name('HR.holidays.index');
+Route::post('HR/holidays/store', [App\Http\Controllers\Holiday\HolidayController::class, 'store'])->name('holidays.store');
