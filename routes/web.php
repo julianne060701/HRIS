@@ -70,3 +70,11 @@ Route::get('/schedule/data', [App\Http\Controllers\Payroll\postschedulecontrolle
 // Holiday Routes
 Route::get('HR/holidays/index', [App\Http\Controllers\Holiday\HolidayController::class, 'index'])->name('HR.holidays.index');
 Route::post('HR/holidays/store', [App\Http\Controllers\Holiday\HolidayController::class, 'store'])->name('holidays.store');
+
+Route::get('HR/attendance/create_sched', [App\Http\Controllers\Payroll\crtschedController::class, 'index'])->name('HR.attendance.create_sched');
+Route::post('/schedule/store', [App\Http\Controllers\Payroll\crtschedController::class,'store'])->name('schedule.store');
+Route::post('/schedule/post', [ScheduleController::class, 'post'])->name('schedule.post');
+Route::get('/shifts', [\App\Http\Controllers\Payroll\postschedulecontroller::class, 'getShifts'])->name('schedule.get');
+// In routes/web.php
+// Route::get('/shifts', [PostScheduleController::class, 'getShifts'])->name('schedule.shifts');
+

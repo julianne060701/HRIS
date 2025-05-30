@@ -431,17 +431,11 @@ return [
                         ],
                         [
                             'text' => 'Create New Schedule',
-                            'url'  => '',
+                            'url'=> 'HR/attendance/create_sched',
                             'icon' => 'fas fa-plus-square',
                         ],
                     ],
-<<<<<<< HEAD
-=======
-                    [
-                        'text' => 'Create New Schedule',
-                        'url'=> 'HR/attendance/create_sched',
-                    ]
->>>>>>> 8cd54a0b47893b84609c25330e0c1fdc127e3df9
+          
                 ],
             ],
         ],

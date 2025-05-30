@@ -19,5 +19,27 @@ class Employee extends Model
         'sss', 'philhealth', 'tin', 'pagibig',
         'status', 'department', 'salary',
     ];
-    
+    public function schedules()
+{
+    return $this->hasMany(\App\Models\EmployeeSchedule::class);
+}
+public function schedule()
+{
+    return $this->hasMany(\App\Models\SchedPost::class, 'employee_id');
+}
+
+    public function getShiftsBetween($from, $to)
+{
+    $schedules = $this->schedules()
+        ->whereBetween('date', [$from, $to])
+        ->get();
+
+    $shiftMap = [];
+
+    foreach ($schedules as $schedule) {
+        $shiftMap[$schedule->date] = $schedule->shift_code;
+    }
+
+    return $shiftMap;
+}
 }

@@ -30,12 +30,31 @@ class postschedulecontroller extends Controller
      */
     public function store(Request $request)
     {
-        $schedule = new SchedPost();
-        $schedule->start_date = $request->start_date;
-        $schedule->end_date = $request->end_date;
-        $schedule->save();
+         // Save the start and end dates to sched_post table
+    $schedulePost = new SchedPost();
+    $schedulePost->start_date = $request->start_date;
+    $schedulePost->end_date = $request->end_date;
+    $schedulePost->save();
 
-    return response()->json(['success' => true, 'data' => $schedule]);
+    // Save each employee's schedule
+    $scheduleData = $request->input('schedule', []);
+
+    foreach ($scheduleData as $employeeId => $dates) {
+        foreach ($dates as $date => $shift) {
+            if (!empty($shift)) {
+                Schedule::updateOrCreate(
+                    ['employee_id' => $employeeId, 'date' => $date],
+                    ['shift' => $shift]
+                );
+            }
+        }
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Schedule successfully posted!',
+        'data' => $schedulePost
+    ]);
     }
 
     /**
@@ -70,26 +89,43 @@ class postschedulecontroller extends Controller
         //
     }
     public function getScheduleData(Request $request)
-{
-    $from = $request->query('from');
-    $to = $request->query('to');
-
-    $schedules = Schedule::with('employee') // make sure you have this relation
-                ->whereBetween('date', [$from, $to])
-                ->get();
-
-    $grouped = [];
-
-    foreach ($schedules as $sched) {
-        $name = $sched->employee->name ?? 'Unknown';
-        $date = $sched->date;
-        $grouped[$name]['name'] = $name;
-        $grouped[$name]['shifts'][$date] = $sched->shift ?? ''; // only shift code is stored
+    {
+        $from = $request->query('from');
+        $to = $request->query('to');
+        $department = $request->query('department');
+    
+        $query = \App\Models\Employee::query();
+    
+        if ($department) {
+            $query->whereRaw('LOWER(department) = ?', [strtolower($department)]);
+        }
+    
+        $employees = $query->get();
+    
+        $result = [];
+        foreach ($employees as $employee) {
+            $result[] = [
+                'id' => $employee->id, // ✅ Needed for the form input name
+                'name' => $employee->first_name . ' ' . $employee->last_name,
+                'schedules' => $employee->getShiftsBetween($from, $to), // ✅ matches JS key
+            ];
+        }
+    
+        return response()->json($result);
     }
+    
+    
+    
 
-    return response()->json(array_values($grouped));
-}
-
-
-
+    public function getShifts()
+    {
+        $shifts = \App\Models\Schedule::select('shift')
+            ->distinct()
+            ->whereNotNull('shift')
+            ->pluck('shift');
+    
+        return response()->json($shifts);
+    }
+    
+    
 }
