@@ -1,33 +1,27 @@
-
 @extends('adminlte::page')
 
 @section('title', 'Employee Attendance')
 @section('plugins.Datatables', true)
 @section('plugins.DatatablesPlugin', true)
 
-@section('css')
-<style>
-    /* .schedulelist 
-    {
-
-    } */
-</style>
 @section('content_header')
-   <h1 class="ml-1">LIST OF SCHEDULE</h1>
+    <h1 class="ml-1">LIST OF SCHEDULE</h1>
 @stop
 
 @section('content')
-<button id="save_sched" class="btn btn-primary mt-3" data-toggle="modal" data-target="#addschedulemodal">CREATE A SCHEDULE</button>
-    <div class="card"></div>
-   <tbody>
-@foreach($schedules as $schedule)
-    <tr>
-        <td>
-            <table class="table table-sm table-bordered mb-0">
-                <thead class="thead-light">
+    <div class="mb-3">
+        <button id="save_sched" class="btn btn-primary" data-toggle="modal" data-target="#addschedulemodal">
+            CREATE A SCHEDULE
+        </button>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <table id="scheduleTable" class="table table-bordered table-striped table-sm">
+                <thead class="thead-dark">
                     <tr>
-                        <th>Code</th>
-                        <th>Shift</th>
+                        <th>Shift Code</th>
+                        <th>Description</th>
                         <th>Time In</th>
                         <th>Time Out</th>
                         <th>Break In</th>
@@ -37,35 +31,37 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr>
-                        <td>{{ $schedule->shift }}</td>
-                        <td>{{ $schedule->desc }}</td>
-                        <td>{{ $schedule->xptd_time_in }}</td>
-                        <td>{{ $schedule->xptd_time_out }}</td>
-                        <td>{{ $schedule->xptd_brk_in }}</td>
-                        <td>{{ $schedule->xptd_brk_out }}</td>
-                        <td>{{ $schedule->wrkhrs }}</td>
-                        <td>{{ $schedule->stat }}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </td>
-@endforeach
-</tbody>
-
-
+                    @foreach($schedules as $schedule)
+                        <tr>
+                            <td>{{ $schedule->shift }}</td>
+                            <td>{{ $schedule->desc }}</td>
+                            <td>{{ $schedule->xptd_time_in }}</td>
+                            <td>{{ $schedule->xptd_time_out }}</td>
+                            <td>{{ $schedule->xptd_brk_in }}</td>
+                            <td>{{ $schedule->xptd_brk_out }}</td>
+                            <td>{{ $schedule->wrkhrs }}</td>
+                            <td>
+                                @if($schedule->stat === 'Active')
+                                    <span class="badge badge-success">Active</span>
+                                @else
+                                    <span class="badge badge-secondary">Not Active</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
                 </tbody>
             </table>
         </div>
     </div>
-    <!-- MODAL FOR CREATING SCHEDULE -->
+
+    <!-- Modal for Creating Schedule -->
     <div class="modal fade" id="addschedulemodal" tabindex="-1" role="dialog" aria-labelledby="addschedulemodallb" aria-hidden="true">
         <div class="modal-dialog" role="document">
             <form action="{{ route('schedule.store') }}" method="POST">
                 @csrf
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="addschedulemodallb">Add Payroll</h5>
+                        <h5 class="modal-title" id="addschedulemodallb">Add Schedule</h5>
                         <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                             <span aria-hidden="true">&times;</span>
                         </button>
@@ -83,42 +79,42 @@
                         @endif
 
                         <div class="form-group">
-                            <label for="shftcd">Shift Code</label>
+                            <label>Shift Code</label>
                             <input type="text" name="shiftcode" class="form-control" required>
                         </div>
 
                         <div class="form-group">
-                            <label for="shftdesc">Description</label>
+                            <label>Description</label>
                             <input type="text" name="shiftdesc" class="form-control" required>
                         </div>
 
                         <div class="form-group">
-                            <label for="sfttm_in">Time IN</label>
+                            <label>Time IN</label>
                             <input type="time" name="shifttime_in" class="form-control" required>
                         </div>
 
                         <div class="form-group">
-                            <label for="sfttm_out">Time OUT</label>
+                            <label>Time OUT</label>
                             <input type="time" name="shifttime_out" class="form-control" required>
                         </div>
 
                         <div class="form-group">
-                            <label for="brk_in">Break IN</label>
+                            <label>Break IN</label>
                             <input type="time" name="break_in" class="form-control" required>
                         </div>
 
                         <div class="form-group">
-                            <label for="brk_out">Break OUT</label>
+                            <label>Break OUT</label>
                             <input type="time" name="break_out" class="form-control" required>
                         </div>
 
                         <div class="form-group">
-                            <label for="tl_hrs">Working Hours</label>
+                            <label>Working Hours</label>
                             <input type="number" name="totalhours" class="form-control" required>
                         </div>
 
                         <div class="form-group">
-                            <label for="status">Status</label>
+                            <label>Status</label>
                             <select name="status" class="form-control" required>
                                 <option value="Active">Active</option>
                                 <option value="NotActive">Not Active</option>
@@ -135,3 +131,14 @@
         </div>
     </div>
 @stop
+
+@section('js')
+<script>
+    $(function () {
+        $('#scheduleTable').DataTable({
+            responsive: true,
+            autoWidth: false
+        });
+    });
+</script>
+@endsection
