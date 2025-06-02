@@ -416,7 +416,7 @@ return [
                 ],
                 [
                     'text' => 'Process DTR',
-                    'url'  => 'HR/payroll/generate',
+                    'url'  => 'HR/attendance/processdtr',
                     'icon' => 'fas fa-cogs',
                 ],
                 [
