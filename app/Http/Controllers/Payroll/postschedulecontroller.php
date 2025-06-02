@@ -29,33 +29,33 @@ class postschedulecontroller extends Controller
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
-    {
-         // Save the start and end dates to sched_post table
-    $schedulePost = new SchedPost();
-    $schedulePost->start_date = $request->start_date;
-    $schedulePost->end_date = $request->end_date;
-    $schedulePost->save();
+{
+    $schedules = $request->input('schedule');
 
-    // Save each employee's schedule
-    $scheduleData = $request->input('schedule', []);
+    if (!$schedules || !is_array($schedules)) {
+        return response()->json(['message' => 'No schedules provided.'], 422);
+    }
 
-    foreach ($scheduleData as $employeeId => $dates) {
-        foreach ($dates as $date => $shift) {
-            if (!empty($shift)) {
-                Schedule::updateOrCreate(
-                    ['employee_id' => $employeeId, 'date' => $date],
-                    ['shift' => $shift]
-                );
-            }
+    foreach ($schedules as $employeeId => $dates) {
+        foreach ($dates as $date => $shiftCode) {
+            if ($shiftCode === '') continue; // Skip empty selections
+
+            \App\Models\EmployeeSchedule::updateOrCreate(
+                [
+                    'employee_id' => $employeeId,
+                    'date' => $date
+                ],
+                [
+                    'shift_code' => $shiftCode
+                ]
+            );
         }
     }
 
-    return response()->json([
-        'success' => true,
-        'message' => 'Schedule successfully posted!',
-        'data' => $schedulePost
-    ]);
-    }
+    return response()->json(['message' => 'Schedule posted successfully!']);
+}
+
+    
 
     /**
      * Display the specified resource.

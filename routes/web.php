@@ -5,7 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\HR\EmployeeController;
 use App\Http\Controllers\payroll\Attendance;
 use App\Http\Controllers\Payroll\AddPayrollController;
-
+use App\Http\Controllers\Payroll\postschedulecontroller;
 
 Route::get('/', function () {
     return view('welcome');
@@ -78,3 +78,6 @@ Route::get('/shifts', [\App\Http\Controllers\Payroll\postschedulecontroller::cla
 // In routes/web.php
 // Route::get('/shifts', [PostScheduleController::class, 'getShifts'])->name('schedule.shifts');
 
+Route::post('/schedule/post', [postschedulecontroller::class, 'store'])->name('schedule.post');
+Route::get('/schedule/get', [postschedulecontroller::class, 'getShifts'])->name('schedule.get');
+Route::get('/schedule/data', [postschedulecontroller::class, 'getScheduleData'])->name('schedule.data');

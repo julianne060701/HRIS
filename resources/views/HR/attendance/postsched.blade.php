@@ -26,6 +26,8 @@
 
         <form id="scheduleForm" method="POST" action="{{ route('schedule.post') }}">
             @csrf
+            <input type="hidden" name="start_date" id="form_start_date">
+            <input type="hidden" name="end_date" id="form_end_date">
 
             <div style="overflow-x: auto; width: 100%;">
                 <table id="schedulepost" class="table table-bordered table-hover mt-3">
@@ -51,9 +53,10 @@ document.addEventListener('DOMContentLoaded', function () {
     const minDate = document.getElementById('minDate');
     const maxDate = document.getElementById('maxDate');
     const departmentSelect = document.getElementById('departmentSelect');
+    const startInput = document.getElementById('form_start_date');
+    const endInput = document.getElementById('form_end_date');
     let currentDateArray = [];
 
-    // Calculate cutoff based on local date
     function getCutoffDatesFromNow() {
         const today = new Date();
         const day = today.getDate();
@@ -81,6 +84,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         minDate.value = dates.start_date;
         maxDate.value = dates.end_date;
+        startInput.value = dates.start_date;
+        endInput.value = dates.end_date;
 
         const start = new Date(dates.start_date);
         const end = new Date(dates.end_date);
