@@ -81,3 +81,6 @@ Route::get('/shifts', [\App\Http\Controllers\Payroll\postschedulecontroller::cla
 Route::post('/schedule/post', [postschedulecontroller::class, 'store'])->name('schedule.post');
 Route::get('/schedule/get', [postschedulecontroller::class, 'getShifts'])->name('schedule.get');
 Route::get('/schedule/data', [postschedulecontroller::class, 'getScheduleData'])->name('schedule.data');
+
+// Process DTR Routes
+Route::get('/HR/attendance/processdtr', [App\Http\Controllers\Payroll\ProcessDTRController::class, 'index'])->name('HR.attendance.processdtr');
