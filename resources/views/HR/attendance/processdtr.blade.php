@@ -23,10 +23,9 @@
                 <thead>
                     <tr>
                         <th>Employee ID</th>
-                        <th>Name</th>
+                        <th>Department</th>
                         <th>Date</th>
                         <th>Schedule</th>
-                        <th>Time Out (Full)</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
@@ -46,7 +45,6 @@
             ajax: '/attendance/data',
             columns: [
                 { data: 'employee_id' },
-                { data: 'name' },
                 { data: 'transdate' },
                 { data: 'time_in_full' },
                 { data: 'time_out_full' }
@@ -56,6 +54,7 @@
             ordering: true,
             pageLength: 10,
         });
+
 
         // Custom filtering function
         $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {

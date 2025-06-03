@@ -7,6 +7,8 @@ use App\Http\Controllers\payroll\Attendance;
 use App\Http\Controllers\Payroll\AddPayrollController;
 use App\Http\Controllers\Payroll\postschedulecontroller;
 
+
+
 Route::get('/', function () {
     return view('welcome');
 });
@@ -60,7 +62,8 @@ Route::get('HR/attendance/importdtr', [App\Http\Controllers\Payroll\Attendance::
 
 
 //route of posting schedule
-Route::get('/attendance/data', [App\Http\Controllers\Payroll\Attendance::class,'getAttendanceData']);
+Route::get('/attendance/data', [Attendance::class, 'getAttendanceData'])->name('attendance.data');
+// Route::get('/attendance/data', [App\Http\Controllers\Payroll\Attendance::class,'getAttendanceData']);
 Route::get('/HR/attendance/postsched', [App\Http\Controllers\Payroll\postschedulecontroller::class,'index'])->name('HR.attendance.postsched');
 Route::post('/schedule/store', [App\Http\Controllers\Payroll\postschedulecontroller::class,'store'])->name('schedule.store');
 Route::get('/cutoff-dates', [App\Http\Controllers\Payroll\AddPayrollController::class, 'getCurrentCutoff'])->name('cutoff.dates');
@@ -81,6 +84,16 @@ Route::get('/shifts', [\App\Http\Controllers\Payroll\postschedulecontroller::cla
 Route::post('/schedule/post', [postschedulecontroller::class, 'store'])->name('schedule.post');
 Route::get('/schedule/get', [postschedulecontroller::class, 'getShifts'])->name('schedule.get');
 Route::get('/schedule/data', [postschedulecontroller::class, 'getScheduleData'])->name('schedule.data');
+
+
+//importing attendance to DTR
+// Route::post('attendance/store', [Attendance::class, 'storeAttendanceData'])->name('attendance.store');
+Route::post('/attendance/store', [Attendance::class, 'store'])->name('attendance.store');
+Route::get('/attendance/store', function () {
+    logger('GET request made to /attendance/store');
+    return response()->json(['error' => 'Use POST only'], 405);
+});
+
 
 // Process DTR Routes
 Route::get('/HR/attendance/processdtr', [App\Http\Controllers\Payroll\ProcessDTRController::class, 'index'])->name('HR.attendance.processdtr');

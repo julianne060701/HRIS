@@ -30,4 +30,10 @@ class schedule extends Model
     {
         return $this->belongsTo(Employee::class); // Replace with actual model if needed
     }
+    // In Shift.php model
+public function dtrs()
+{
+    return $this->hasMany(Dtr::class);
+}
+
 }
