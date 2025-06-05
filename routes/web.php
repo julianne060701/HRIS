@@ -3,9 +3,9 @@
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\HR\EmployeeController;
-use App\Http\Controllers\payroll\Attendance;
 use App\Http\Controllers\Payroll\AddPayrollController;
 use App\Http\Controllers\Payroll\postschedulecontroller;
+use App\Http\Controllers\Payroll\Attendance;
 
 
 
@@ -93,6 +93,7 @@ Route::get('/attendance/store', function () {
     logger('GET request made to /attendance/store');
     return response()->json(['error' => 'Use POST only'], 405);
 });
+Route::post('/attendance/import', [Attendance::class, 'importFromAttendance'])->name('attendance.import');
 
 
 // Process DTR Routes

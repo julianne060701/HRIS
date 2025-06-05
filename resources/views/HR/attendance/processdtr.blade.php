@@ -38,7 +38,7 @@
 @stop
 
 @section('js')
-<script>
+<!-- <script>
     $(document).ready(function () {
         // Initialize DataTable
         var table = $('#attendanceTable').DataTable({
@@ -73,12 +73,55 @@
         $('#minDate, #maxDate').on('change', function () {
             table.draw();
         });
+});
+        $('#importButton').on('click', function() {
+        var minDate = $('#minDate').val();
+        var maxDate = $('#maxDate').val();
 
-        // Click event for import button (optional)
-        $('#importButton').on('click', function () {
-            // You can trigger an import request or just refresh table
-            table.ajax.reload();
+        $.ajax({
+            url: '{{ route("attendance.import") }}',
+            method: 'POST',
+            data: {
+                minDate: minDate,
+                maxDate: maxDate,
+                _token: '{{ csrf_token() }}'
+            },
+            success: function(response) {
+                alert(response.message);
+                table.ajax.reload();  // reload datatable data
+            },
+            error: function(xhr) {
+                alert('Import failed: ' + xhr.statusText);
+            }
+        });
+    });
+
+  
+</script> -->
+<script>
+    $(document).ready(function () {
+        $('#importButton').on('click', function() {
+            var minDate = $('#minDate').val();
+            var maxDate = $('#maxDate').val();
+
+            $.ajax({
+                url: '{{ route("attendance.import") }}',
+                method: 'POST',
+                data: {
+                    minDate: minDate,
+                    maxDate: maxDate,
+                    _token: '{{ csrf_token() }}'
+                },
+                success: function(response) {
+                    alert(response.message);
+                    $('#attendanceTable').DataTable().ajax.reload(); // refresh table if needed
+                },
+                error: function(xhr) {
+                    alert('Import failed: ' + xhr.statusText);
+                }
+            });
         });
     });
 </script>
+
 @stop

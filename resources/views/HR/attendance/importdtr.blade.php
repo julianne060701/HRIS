@@ -21,8 +21,9 @@
                 <thead>
                     <tr>
                         <th>Employee ID</th>
-                        <th>Date</th>
+                        <th>Date In</th>
                         <th>Time In</th>
+                        <th>Date Out</th>
                         <th>Time Out</th>
                     </tr>
                 </thead>
@@ -35,59 +36,50 @@
 
 @section('js')
 <script>
-    $(document).ready(function () {
-        // Initialize DataTable
-        var table = $('#attendanceTable').DataTable({
-            processing: true,
-            serverSide: true,
-            ajax: {
-                url: '{{ route('attendance.data') }}',
-                data: function (d) {
-                    // Add filter params (minDate and maxDate) to the request
-                    d.minDate = $('#minDate').val();
-                    d.maxDate = $('#maxDate').val();
-                }
+   $(document).ready(function () {
+    var table = $('#attendanceTable').DataTable({
+        ajax: {
+            url: '/attendance/data', // or "{{ route('attendance.data') }}"
+            dataSrc: 'data'
+        },
+        columns: [
+            { data: 'employee_id' },
+            { data: 'transindate' },
+            { data: 'time_in' },
+            { data: 'transoutdate' },
+            {data: 'transoutdate'},
+            { data: 'time_out' }
+        ],
+        responsive: true,
+        autoWidth: false,
+        ordering: true,
+        pageLength: 10
+    });
+
+    // Your other code, e.g. button click handlers, import logic, etc.
+
+    $('#importButton').on('click', function() {
+        var minDate = $('#minDate').val();
+        var maxDate = $('#maxDate').val();
+
+        $.ajax({
+            url: '{{ route("attendance.import") }}',
+            method: 'POST',
+            data: {
+                minDate: minDate,
+                maxDate: maxDate,
+                _token: '{{ csrf_token() }}'
             },
-            columns: [
-                { data: 'employee_id' },
-                { data: 'transdate' },
-                { data: 'time_in_full' },
-                { data: 'time_out_full' }
-            ],
-            responsive: true,
-            autoWidth: false,
-            ordering: true,
-            pageLength: 10,
+            success: function(response) {
+                alert(response.message);
+                table.ajax.reload();  // reload the table using the stored instance
+            },
+            error: function(xhr) {
+                alert('Import failed: ' + xhr.statusText);
+            }
         });
+    });
+});
 
-        // Apply filter on date change
-        $('#minDate, #maxDate').on('change', function () {
-            table.ajax.reload();
-        });
-
-        // Click event for import button (optional)
-        $('#importButton').on('click', function () {
-            var attendanceData = table.rows().data().toArray();
-            $.ajax({
-                url: '{{ route('attendance.store') }}',
-                method: 'POST',
-                 data: {
-                    _token: '{{ csrf_token() }}',
-                    attendance_data: attendanceData // Send the attendance data
-                },
-                success: function (response) {
-                    if (response.status === 'success') {
-                        alert(response.message);
-                        table.ajax.reload(); // Reload table after storing
-                    } else {
-                        alert(response.message);
-                    }
-                },
-                error: function () {
-                    alert('An error occurred while saving the data.');
-                }
-            });
-        });
-   });
 </script>
 @stop
