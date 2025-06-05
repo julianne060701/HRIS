@@ -30,6 +30,7 @@
                 <tbody></tbody>
             </table>
             <button type="button" id="importButton" class="btn btn-primary mt-3">IMPORT DTR</button>
+            <button type="button" id="uploadButton" class="btn btn-primary mt-3">UPLOAD DTR</button>
         </div>
     </div>
 @stop
@@ -47,7 +48,6 @@
             { data: 'transindate' },
             { data: 'time_in' },
             { data: 'transoutdate' },
-            {data: 'transoutdate'},
             { data: 'time_out' }
         ],
         responsive: true,
