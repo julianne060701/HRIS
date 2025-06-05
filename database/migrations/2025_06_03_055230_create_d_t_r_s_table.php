@@ -14,8 +14,9 @@ return new class extends Migration
     Schema::create('dtr', function (Blueprint $table) {
         $table->id();
         $table->string('employee_id');
-        $table->date('transdate');
+        $table->date('transindate');
         $table->string('time_in');
+        $table->date('transoutdate');
         $table->string('time_out');
         $table->timestamps();
     });

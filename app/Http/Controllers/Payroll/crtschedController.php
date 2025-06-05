@@ -33,18 +33,18 @@ class crtschedController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-    'shiftcode'      => 'nullable|string|max:50',
+    'shift_code'      => 'required|string|max:50',
     'shiftdesc'      => 'nullable|string|max:100',
     'shifttime_in'   => 'required|date_format:H:i',
     'shifttime_out'  => 'required|date_format:H:i',
-    'break_in'       => 'required|date_format:H:i',
-    'break_out'      => 'required|date_format:H:i',
+    'break_in'       => 'nullable|date_format:H:i',
+    'break_out'      => 'nullable|date_format:H:i',
     'totalhours'     => 'required|integer|max:20',
     'status'         => 'required|string|max:20',
 ]);
 
         schedule::create([
-            'shift'=>          $request->shiftcode,
+            'shift_code'=>          $request->shift_code,
             'desc'=>           $request->shiftdesc,
             'xptd_time_in'=>        $request->shifttime_in,
             'xptd_time_out'=>       $request->shifttime_out,

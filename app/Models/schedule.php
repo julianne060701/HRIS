@@ -14,7 +14,7 @@ class schedule extends Model
     protected $table = 'schedule';
 
     protected $fillable = [
-        'shift',
+        'shift_code',
         'desc',
         'xptd_time_in',
         'xptd_time_out',

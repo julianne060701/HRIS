@@ -33,7 +33,7 @@
                 <tbody>
                     @foreach($schedules as $schedule)
                         <tr>
-                            <td>{{ $schedule->shift }}</td>
+                            <td>{{ $schedule->shift_code}}</td>
                             <td>{{ $schedule->desc }}</td>
                             <td>{{ $schedule->xptd_time_in }}</td>
                             <td>{{ $schedule->xptd_time_out }}</td>
@@ -80,7 +80,7 @@
 
                         <div class="form-group">
                             <label>Shift Code</label>
-                            <input type="text" name="shiftcode" class="form-control" required>
+                            <input type="text" name="shift_code" class="form-control" required>
                         </div>
 
                         <div class="form-group">
@@ -100,12 +100,12 @@
 
                         <div class="form-group">
                             <label>Break IN</label>
-                            <input type="time" name="break_in" class="form-control" required>
+                            <input type="time" name="break_in" class="form-control">
                         </div>
 
                         <div class="form-group">
                             <label>Break OUT</label>
-                            <input type="time" name="break_out" class="form-control" required>
+                            <input type="time" name="break_out" class="form-control">
                         </div>
 
                         <div class="form-group">

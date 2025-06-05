@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('schedule', function (Blueprint $table) {
             $table->id();
-            $table->string('shift');
+            $table->string('shift_code');
             $table->string('desc');
             $table->time('xptd_time_in')->nullable();
             $table->time('xptd_time_out')->nullable();
