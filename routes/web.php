@@ -29,6 +29,9 @@ require __DIR__.'/auth.php';
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
 
+// Permission Routes
+Route::get('/Permission/index', [App\Http\Controllers\Permission\PermissionController::class, 'index'])->name('Permission.index');
+
 // HR Routes
 
 Route::get('/HR/manage_employee/employee', [App\Http\Controllers\HR\EmployeeController::class, 'index'])->name('HR.manage_employee.employee');
