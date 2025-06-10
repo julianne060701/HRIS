@@ -24,4 +24,12 @@ class DTR extends Model
 {
     return $this->belongsTo(Shift::class, 'shift_id');  // Assuming `shift_id` exists in 'dtr' table
 }
+// In Attendance.php
+public function employee() {
+    return $this->belongsTo(Employee::class, 'employee_id');
+}
+
+public function plottedSchedule() {
+    return $this->hasOne(EmployeeSchedule::class, 'employee_id', 'employee_id')->where('date', $this->transindate);
+}
 }

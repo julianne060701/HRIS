@@ -105,7 +105,7 @@ class postschedulecontroller extends Controller
         $result = [];
         foreach ($employees as $employee) {
             $result[] = [
-                'id' => $employee->id, // ✅ Needed for the form input name
+                'employee_id' => $employee->employee_id, // ✅ Needed for the form input name
                 'name' => $employee->first_name . ' ' . $employee->last_name,
                 'schedules' => $employee->getShiftsBetween($from, $to), // ✅ matches JS key
             ];

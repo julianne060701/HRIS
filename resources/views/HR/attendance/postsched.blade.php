@@ -143,7 +143,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     currentDateArray.forEach(date => {
                         const shift = row.schedules?.[date] || '';
                         const select = document.createElement('select');
-                        select.name = `schedule[${row.id}][${date}]`;
+                        select.name = `schedule[${row.employee_id}][${date}]`;
                         select.className = 'form-control form-control-sm';
 
                         const defaultOption = document.createElement('option');

@@ -186,4 +186,42 @@ public function importFromAttendance(Request $request)
     {
         //
     }
+    public function getProcessedDTR(Request $request)
+    {
+        try {
+            $query = DB::table('employee_dtr')
+                ->join('employees', 'employee_dtr.employee_id', '=', 'employees.id')
+                ->select(
+                    'employee_dtr.employee_id',
+                    DB::raw("CONCAT(employees.first_name, ' ', employees.last_name) AS employee_name"),
+                    'employee_dtr.date',
+                    'employee_dtr.plotted_time_in',
+                    'employee_dtr.plotted_time_out',
+                    'employee_dtr.actual_time_in',
+                    'employee_dtr.actual_time_out',
+                    'employee_dtr.final_time_in',
+                    'employee_dtr.final_time_out'
+                );
+    
+            if ($request->minDate) {
+                $query->whereDate('employee_dtr.date', '>=', $request->minDate);
+            }
+    
+            if ($request->maxDate) {
+                $query->whereDate('employee_dtr.date', '<=', $request->maxDate);
+            }
+    
+            $data = $query->get();
+    
+            return response()->json(['data' => $data]);
+    
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => true,
+                'message' => $e->getMessage(),
+                'line' => $e->getLine(),
+                'file' => $e->getFile(),
+            ], 500);
+        }
+    }
 }

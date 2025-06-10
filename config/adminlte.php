@@ -411,7 +411,7 @@ return [
             'submenu' => [
                 [
                     'text' => 'Import DTR',
-                    'url'  => 'HR/attendance/importdtr',
+                    'url'  => '/HR/attendance/importdtr',
                     'icon' => 'fas fa-fingerprint',
                 ],
                 [

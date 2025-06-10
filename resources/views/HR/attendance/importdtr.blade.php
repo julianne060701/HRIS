@@ -5,7 +5,7 @@
 @section('plugins.DatatablesPlugin', true)
 
 @section('content_header')
-    <h1 class="ml-1">Process DTR</h1>
+    <h1 class="ml-1">IMPORT DTR</h1>
 @stop
 
 @section('content')

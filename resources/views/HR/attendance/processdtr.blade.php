@@ -1,127 +1,62 @@
 @extends('adminlte::page')
 
-@section('title', 'Employee Attendance')
+@section('title', 'Process DTR')
 @section('plugins.Datatables', true)
 @section('plugins.DatatablesPlugin', true)
 
 @section('content_header')
-    <h1 class="ml-1">Process DTR</h1>
+    <h1 class="ml-1">Process DTR (Plotted vs. Actual)</h1>
 @stop
 
 @section('content')
-    <div class="card">
-        <div class="card-body">
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
 
-            <div class="mb-3">
-                <label for="minDate">From:</label>
-                <input type="date" id="minDate" class="form-control d-inline w-auto mx-2">
-                <label for="maxDate">To:</label>
-                <input type="date" id="maxDate" class="form-control d-inline w-auto mx-2">
+                    @php
+                        $heads = [
+                            'Employee ID',
+                            'Employee Name',
+                            'Date',
+                            'Plotted Time In',
+                            'Plotted Time Out',
+                            'Actual Time In',
+                            'Actual Time Out',
+                        ];
+
+                        $config = [
+                            'order' => [[2, 'desc']],
+                            'columns' => array_fill(0, count($heads), ['orderable' => true]),
+                        ];
+                    @endphp
+
+                    <x-adminlte-datatable id="dtrTable" :heads="$heads" :config="$config" hoverable class="table-custom">
+                        @forelse ($data as $row)
+                            <tr>
+                                <td>{{ $row->employee_id }}</td>
+                                <td>{{ $row->employee_name }}</td>
+                                <td>{{ $row->date }}</td>
+                                <td>{{ $row->plotted_time_in ? \Carbon\Carbon::parse($row->plotted_time_in)->format('h:i A') : 'N/A' }}</td>
+                                <td>{{ $row->plotted_time_out ? \Carbon\Carbon::parse($row->plotted_time_out)->format('h:i A') : 'N/A' }}</td>
+                                <td>{{ $row->actual_time_in ? \Carbon\Carbon::parse($row->actual_time_in)->format('h:i A') : 'N/A' }}</td>
+                                <td>{{ $row->actual_time_out ? \Carbon\Carbon::parse($row->actual_time_out)->format('h:i A') : 'N/A' }}</td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="text-center">No DTR records found.</td>
+                            </tr>
+                        @endforelse
+                    </x-adminlte-datatable>
+
+                </div>
             </div>
-
-            <table id="attendanceTable" class="table table-bordered table-hover">
-                <thead>
-                    <tr>
-                        <th>Employee ID</th>
-                        <th>Department</th>
-                        <th>Date</th>
-                        <th>Schedule</th>
-                    </tr>
-                </thead>
-                <tbody></tbody>
-            </table>
-
-            <button id="importButton" class="btn btn-primary mt-3">IMPORT DTR</button>
-
         </div>
     </div>
+</div>
 @stop
 
 @section('js')
-<!-- <script>
-    $(document).ready(function () {
-        // Initialize DataTable
-        var table = $('#attendanceTable').DataTable({
-            ajax: '/attendance/data',
-            columns: [
-                { data: 'employee_id' },
-                { data: 'transdate' },
-                { data: 'time_in_full' },
-                { data: 'time_out_full' }
-            ],
-            responsive: true,
-            autoWidth: false,
-            ordering: true,
-            pageLength: 10,
-        });
-
-
-        // Custom filtering function
-        $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
-            var min = $('#minDate').val();
-            var max = $('#maxDate').val();
-            var date = data[2]; // "transdate" column
-
-            if (min) min = new Date(min);
-            if (max) max = new Date(max);
-            var rowDate = new Date(date);
-
-            return (!min || rowDate >= min) && (!max || rowDate <= max);
-        });
-
-        // Apply filter on date change
-        $('#minDate, #maxDate').on('change', function () {
-            table.draw();
-        });
-});
-        $('#importButton').on('click', function() {
-        var minDate = $('#minDate').val();
-        var maxDate = $('#maxDate').val();
-
-        $.ajax({
-            url: '{{ route("attendance.import") }}',
-            method: 'POST',
-            data: {
-                minDate: minDate,
-                maxDate: maxDate,
-                _token: '{{ csrf_token() }}'
-            },
-            success: function(response) {
-                alert(response.message);
-                table.ajax.reload();  // reload datatable data
-            },
-            error: function(xhr) {
-                alert('Import failed: ' + xhr.statusText);
-            }
-        });
-    });
-
-  
-</script> -->
-<script>
-    $(document).ready(function () {
-        $('#importButton').on('click', function() {
-            var minDate = $('#minDate').val();
-            var maxDate = $('#maxDate').val();
-
-            $.ajax({
-                url: '{{ route("attendance.import") }}',
-                method: 'POST',
-                data: {
-                    minDate: minDate,
-                    maxDate: maxDate,
-                    _token: '{{ csrf_token() }}'
-                },
-                success: function(response) {
-                    alert(response.message);
-                    $('#attendanceTable').DataTable().ajax.reload(); // refresh table if needed
-                },
-                error: function(xhr) {
-                    alert('Import failed: ' + xhr.statusText);
-                }
-            });
-        });
-    });
-</script>
-
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 @stop
