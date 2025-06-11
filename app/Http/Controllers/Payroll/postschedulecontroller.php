@@ -119,10 +119,10 @@ class postschedulecontroller extends Controller
 
     public function getShifts()
     {
-        $shifts = \App\Models\Schedule::select('shift')
+        $shifts = \App\Models\Schedule::select('shift_code')
             ->distinct()
-            ->whereNotNull('shift')
-            ->pluck('shift');
+            ->whereNotNull('shift_code')
+            ->pluck('shift_code');
     
         return response()->json($shifts);
     }

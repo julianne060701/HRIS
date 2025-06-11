@@ -45,7 +45,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="text-center">No DTR records found.</td>
+                                <td colspan="7" class="text-center">No DTR records found.</td> 
                             </tr>
                         @endforelse
                     </x-adminlte-datatable>

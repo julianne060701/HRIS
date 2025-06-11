@@ -17,24 +17,26 @@ class ProcessDTRController extends Controller
     public function index(Request $request)
     {
         
-        $data = DB::table('employee_schedules')
+    $data = DB::table('employee_schedules')
     ->select(
         'employee_schedules.employee_id',
-        DB::raw("CONCAT(employees.first_name, ' ', employees.last_name) AS employee_name"),
+        DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) AS employee_name"),
         'employee_schedules.date',
         'schedule.xptd_time_in AS plotted_time_in',
         'schedule.xptd_time_out AS plotted_time_out',
         'attendance.time_in AS actual_time_in',
         'attendance.time_out AS actual_time_out'
     )
-    ->join('employees', 'employee_schedules.employee_id', '=', 'employees.id')
-    ->leftJoin('schedule', 'employee_schedules.shift_code', '=', 'schedule.shift')
+    ->leftJoin('employees', 'employee_schedules.employee_id', '=', 'employees.employee_
+    id')
+    ->leftJoin('schedule', 'employee_schedules.shift_code', '=', 'schedule.shift_code')
     ->leftJoin('attendance', function ($join) {
         $join->on('employee_schedules.employee_id', '=', 'attendance.employee_id')
-             ->whereRaw('DATE(attendance.transindate) = employee_schedules.date');
+             ->whereRaw('DATE(attendance.transindate) = employee_schedules.date'); 
     })
     ->orderByDesc('employee_schedules.date')
     ->get();
+
 
     
         return view('HR.attendance.processdtr', ['data' => $data]);
