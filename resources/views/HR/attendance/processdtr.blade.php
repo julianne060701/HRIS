@@ -9,54 +9,79 @@
 @stop
 
 @section('content')
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-body">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">Daily Time Records Overview</h3>
+        </div>
+        <div class="card-body">
+            <form action="{{ route('payroll.process-dtr.store') }}" method="POST">
+                @csrf
 
-                    @php
-                        $heads = [
-                            'Employee ID',
-                            'Employee Name',
-                            'Date',
-                            'Plotted Time In',
-                            'Plotted Time Out',
-                            'Actual Time In',
-                            'Actual Time Out',
-                        ];
+                {{-- Define table headers --}}
+                @php
+                    $heads = [
+                        'Employee ID',
+                        'Employee Name',
+                        'Date',
+                        'Plotted Time In',
+                        'Plotted Time Out',
+                        'Actual Time In',
+                        'Actual Time Out',
+                    ];
 
-                        $config = [
-                            'order' => [[2, 'desc']],
-                            'columns' => array_fill(0, count($heads), ['orderable' => true]),
-                        ];
-                    @endphp
+                    // IMPORTANT: Configure the DataTable to show all entries
+                    // This ensures all hidden inputs are part of the form submission.
+                    $config = [
+                        'order' => [[2, 'desc']], // Order by date descending
+                        'columns' => array_fill(0, count($heads), ['orderable' => true]),
+                        'paging' => false,      // Disable pagination
+                        'info' => false,        // Disable info text (showing 1 to X of Y entries)
+                        'searching' => true,    // Keep search enabled if desired
+                        'pageLength' => -1,     // Show all entries. -1 means no limit.
+                        'responsive' => true,   // Make table responsive
+                    ];
+                @endphp
 
-                    <x-adminlte-datatable id="dtrTable" :heads="$heads" :config="$config" hoverable class="table-custom">
-                        @forelse ($data as $row)
-                            <tr>
-                                <td>{{ $row->employee_id }}</td>
-                                <td>{{ $row->employee_name }}</td>
-                                <td>{{ $row->date }}</td>
-                                <td>{{ $row->plotted_time_in ? \Carbon\Carbon::parse($row->plotted_time_in)->format('h:i A') : 'N/A' }}</td>
-                                <td>{{ $row->plotted_time_out ? \Carbon\Carbon::parse($row->plotted_time_out)->format('h:i A') : 'N/A' }}</td>
-                                <td>{{ $row->actual_time_in ? \Carbon\Carbon::parse($row->actual_time_in)->format('h:i A') : 'N/A' }}</td>
-                                <td>{{ $row->actual_time_out ? \Carbon\Carbon::parse($row->actual_time_out)->format('h:i A') : 'N/A' }}</td>
-                            </tr>
-                        @empty
-                            <tr>
-                                <td colspan="7" class="text-center">No DTR records found.</td> 
-                            </tr>
-                        @endforelse
-                    </x-adminlte-datatable>
+                <x-adminlte-datatable id="dtrTable" :heads="$heads" :config="$config" hoverable bordered striped class="table-custom">
+                    @forelse ($data as $row)
+                        <tr>
+                            <td>
+                                {{ $row->employee_id }}
+                                <input type="hidden" name="dtrs[{{ $loop->index }}][employee_id]" value="{{ $row->employee_id }}">
+                                <input type="hidden" name="dtrs[{{ $loop->index }}][date]" value="{{ $row->date }}">
+                                <input type="hidden" name="dtrs[{{ $loop->index }}][shift_code]" value="{{ $row->shift_code }}">
+                                <input type="hidden" name="dtrs[{{ $loop->index }}][xptd_time_in]" value="{{ $row->plotted_time_in }}">
+                                <input type="hidden" name="dtrs[{{ $loop->index }}][xptd_time_out]" value="{{ $row->plotted_time_out }}">
+                                <input type="hidden" name="dtrs[{{ $loop->index }}][time_in]" value="{{ $row->actual_time_in }}">
+                                <input type="hidden" name="dtrs[{{ $loop->index }}][time_out]" value="{{ $row->actual_time_out }}">
+                            </td>
+                            <td>{{ $row->employee_name }}</td>
+                            <td>{{ $row->date }}</td>
+                            <td>{{ $row->plotted_time_in ? \Carbon\Carbon::parse($row->plotted_time_in)->format('h:i A') : 'N/A' }}</td>
+                            <td>{{ $row->plotted_time_out ? \Carbon\Carbon::parse($row->plotted_time_out)->format('h:i A') : 'N/A' }}</td>
+                            <td>{{ $row->actual_time_in ? \Carbon\Carbon::parse($row->actual_time_in)->format('h:i A') : 'N/A' }}</td>
+                            <td>{{ $row->actual_time_out ? \Carbon\Carbon::parse($row->actual_time_out)->format('h:i A') : 'N/A' }}</td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="{{ count($heads) }}" class="text-center">No DTR records found for processing.</td>
+                        </tr>
+                    @endforelse
+                </x-adminlte-datatable>
 
-                </div>
-            </div>
+                <button type="submit" class="btn btn-primary mt-3">Process DTRs</button>
+            </form>
         </div>
     </div>
-</div>
 @stop
 
 @section('js')
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+@stop
+@section('css')
+    <style>
+        .table-custom tbody tr td {
+            vertical-align: middle;
+        }
+    </style>
 @stop

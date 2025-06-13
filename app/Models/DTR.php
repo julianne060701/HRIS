@@ -17,7 +17,12 @@ class DTR extends Model
         'time_in',
         'transoutdate',
         'time_out',
-        'created_at', 
+        'shift_code',
+        'xptd_time_in',
+        'xptd_time_out',
+        'is_late',
+        'late_minutes',
+        // 'created_at', 
         'updated_at'
     ];
     public function shift()

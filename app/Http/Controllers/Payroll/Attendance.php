@@ -15,9 +15,9 @@ class Attendance extends Controller
     public function index()
     {
         
-        $hasData = DTR::exists(); // Returns true if any record exists
 
-        return view('hr.attendance.importdtr', compact('hasData'));
+
+        return view('hr.attendance.importdtr', );
     }
 
     /**
