@@ -22,6 +22,8 @@ class DTR extends Model
         'xptd_time_out',
         'is_late',
         'late_minutes',
+        'is_undertime',
+        'undertime_minutes',
         // 'created_at', 
         'updated_at'
     ];
@@ -29,6 +31,18 @@ class DTR extends Model
 {
     return $this->belongsTo(Shift::class, 'shift_id');  // Assuming `shift_id` exists in 'dtr' table
 }
+ protected $casts = [
+        'transindate'     => 'date',
+        'transoutdate'    => 'date',
+        'time_in'         => 'string', 
+        'time_out'        => 'string', 
+        'xptd_time_in'    => 'string', 
+        'xptd_time_out'   => 'string', 
+        'is_late'         => 'boolean',
+        'is_undertime'    => 'boolean',
+        'late_minutes'    => 'integer',
+        'undertime_minutes' => 'integer',
+    ];
 // In Attendance.php
 public function employee() {
     return $this->belongsTo(Employee::class, 'employee_id');

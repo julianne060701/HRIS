@@ -35,6 +35,8 @@ class Attendance extends Controller
 {
     $attendanceData = $request->input('attendance_data');
 
+     dd($attendanceData);
+
     if (!empty($attendanceData)) {
         foreach ($attendanceData as $attendance) {
             $validated = Validator::make($attendance, [
@@ -45,13 +47,13 @@ class Attendance extends Controller
                 'time_out'    => 'nullable|date_format:H:i:s',
             ])->validate();
             
-            $exists = DTR::where('id', $validated['id'])
+            $exists = DTR::where('employee_id', $validated['employee_id'])
              ->where('transindate', $validated['transindate'])
              ->exists();
 
             if (!$exists) {
                 DTR::create([
-                    'id'          => $validated['id'],
+                    // 'id'          => $validated['id'],
                     'employee_id' => $validated['employee_id'],
                     'transindate'   => $validated['transindate'],
                     'time_in'     => $validated['time_in'] ?? null,
@@ -139,13 +141,14 @@ public function importFromAttendance(Request $request)
     $attendanceData = $query->get();
 
     foreach ($attendanceData as $row) {
-        $exists = DB::table('dtr')
-            ->where('id', $row->id)
+         $exists = DB::table('dtr')
+            ->where('employee_id', $row->employee_id)
+            ->where('transindate', $row->transindate) 
             ->exists();
 
         if (!$exists) {
             DB::table('dtr')->insert([
-                'id'           => $row -> id,
+                // 'id'           => $row -> id,
                 'employee_id'  => $row->employee_id,
                 'transindate'  => $row->transindate,
                 'time_in'      => $row->time_in ?? null,
