@@ -5,13 +5,15 @@
 @section('content')
 <div class="card">
     <div class="card-body">
-        <button id="cutoff_btn" class="btn btn-primary mb-3">Get Cutoff Dates</button>
+        <button id="cutoff_btn" class="btn btn-primary mb-3">Get Current Cutoff Dates</button>
 
         <div class="mb-3">
             <label for="minDate">From:</label>
             <input type="date" id="minDate" class="form-control d-inline w-auto mx-2" />
             <label for="maxDate">To:</label>
             <input type="date" id="maxDate" class="form-control d-inline w-auto mx-2" />
+            {{-- New button for fetching schedule based on manual date range --}}
+            <button id="fetch_schedule_btn" class="btn btn-info mb-3">Fetch Schedule</button>
         </div>
 
         <div class="mb-3">
@@ -49,7 +51,8 @@
 @section('js')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const btn = document.getElementById('cutoff_btn');
+    const cutoffBtn = document.getElementById('cutoff_btn');
+    const fetchScheduleBtn = document.getElementById('fetch_schedule_btn'); // New button
     const minDate = document.getElementById('minDate');
     const maxDate = document.getElementById('maxDate');
     const departmentSelect = document.getElementById('departmentSelect');
@@ -79,7 +82,29 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     }
 
-    btn.addEventListener('click', function () {
+    // Function to populate header dates
+    function populateScheduleHeader(startDate, endDate) {
+        const headerRow = document.getElementById('schedule-header');
+        headerRow.innerHTML = `<th>Name</th>`;
+        currentDateArray = []; // Clear previous dates
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const current = new Date(d);
+            const formatted = current.toISOString().split('T')[0];
+            const weekday = current.toLocaleDateString('en-US', { weekday: 'short' });
+
+            currentDateArray.push(formatted);
+            const th = document.createElement('th');
+            th.textContent = `${formatted} (${weekday})`;
+            headerRow.appendChild(th);
+        }
+    }
+
+    // Event listener for "Get Current Cutoff Dates" button
+    cutoffBtn.addEventListener('click', function () {
         const dates = getCutoffDatesFromNow();
 
         minDate.value = dates.start_date;
@@ -87,26 +112,28 @@ document.addEventListener('DOMContentLoaded', function () {
         startInput.value = dates.start_date;
         endInput.value = dates.end_date;
 
-        const start = new Date(dates.start_date);
-        const end = new Date(dates.end_date);
-        const headerRow = document.getElementById('schedule-header');
-        headerRow.innerHTML = `<th>Name</th>`;
-
-        const dateArray = [];
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const current = new Date(d);
-            const formatted = current.toISOString().split('T')[0];
-            const weekday = current.toLocaleDateString('en-US', { weekday: 'short' });
-
-            dateArray.push(formatted);
-            const th = document.createElement('th');
-            th.textContent = `${formatted} (${weekday})`;
-            headerRow.appendChild(th);
-        }
-
-        currentDateArray = dateArray;
+        populateScheduleHeader(dates.start_date, dates.end_date);
         loadSchedule(dates.start_date, dates.end_date, departmentSelect.value);
     });
+
+    // Event listener for the new "Fetch Schedule" button
+    fetchScheduleBtn.addEventListener('click', function () {
+        const startDate = minDate.value;
+        const endDate = maxDate.value;
+
+        if (!startDate || !endDate) {
+            alert('Please select both a "From" and "To" date to fetch the schedule.');
+            return;
+        }
+
+        // Update hidden form fields for posting
+        startInput.value = startDate;
+        endInput.value = endDate;
+
+        populateScheduleHeader(startDate, endDate);
+        loadSchedule(startDate, endDate, departmentSelect.value);
+    });
+
 
     departmentSelect.addEventListener('change', function () {
         if (minDate.value && maxDate.value) {
@@ -131,7 +158,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 if (scheduleData.length === 0) {
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `<td colspan="${currentDateArray.length + 1}" class="text-center">No employees found for this department.</td>`;
+                    tr.innerHTML = `<td colspan="${currentDateArray.length + 1}" class="text-center">No employees found for this department or date range.</td>`;
                     tbody.appendChild(tr);
                     return;
                 }
@@ -141,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     tr.innerHTML = `<td>${row.name}</td>`;
 
                     currentDateArray.forEach(date => {
-                        const shift = row.schedules?.[date] || '';
+                        const actualShiftOrLeave = row.schedules?.[date] || ''; // Get the value that was stored
                         const select = document.createElement('select');
                         select.name = `schedule[${row.employee_id}][${date}]`;
                         select.className = 'form-control form-control-sm';
@@ -155,7 +182,10 @@ document.addEventListener('DOMContentLoaded', function () {
                             const option = document.createElement('option');
                             option.value = s;
                             option.textContent = s;
-                            if (shift === s) option.selected = true;
+                            // Check if the current shift matches what's stored or if it's a leave type
+                            if (actualShiftOrLeave === s) {
+                                option.selected = true;
+                            }
                             select.appendChild(option);
                         });
 
@@ -168,7 +198,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             })
             .catch(error => {
+<<<<<<< HEAD
                     console.error("Schedule Fetch Error:", error);
+=======
+                console.error("Schedule Fetch Error:", error);
+                alert('An error occurred while fetching the schedule. Please try again.');
+>>>>>>> aac47f84155b909e22432a2c15a3382c43cd8853
             });
     }
 
@@ -186,11 +221,24 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(res => res.json())
         .then(data => {
             alert(data.message || 'Schedule posted successfully!');
+            // After successful post, reload the schedule to show updated status
+            if (minDate.value && maxDate.value) {
+                loadSchedule(minDate.value, maxDate.value, departmentSelect.value);
+            }
         })
         .catch(err => {
             console.error('Schedule Post Error:', err);
+            alert('An error occurred while posting the schedule. Please try again.');
         });
     });
+
+    // Initial load: If dates are not pre-filled, automatically get and display the current cutoff dates on page load
+    if (minDate.value && maxDate.value) {
+        populateScheduleHeader(minDate.value, maxDate.value);
+        loadSchedule(minDate.value, maxDate.value, departmentSelect.value);
+    } else {
+        cutoffBtn.click(); // Simulate a click on "Get Current Cutoff Dates"
+    }
 });
 </script>
 

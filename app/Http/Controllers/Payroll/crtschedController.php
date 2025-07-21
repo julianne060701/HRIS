@@ -43,7 +43,7 @@ class crtschedController extends Controller
     'status'         => 'required|string|max:20',
 ]);
 
-        schedule::create([
+        Schedule::create([
             'shift_code'=>          $request->shift_code,
             'desc'=>           $request->shiftdesc,
             'xptd_time_in'=>        $request->shifttime_in,

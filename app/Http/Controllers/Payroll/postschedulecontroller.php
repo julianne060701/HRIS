@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Payroll;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
-use App\Models\SchedPost;
-use App\Models\Schedule; 
+use App\Models\SchedPost; // This model seems unused, consider removing if not needed
+use App\Models\Schedule;
+use App\Models\EmployeeSchedule;
+use App\Models\LeaveType;
+use App\Models\Employee; // Ensure this is imported
 
 class postschedulecontroller extends Controller
 {
@@ -28,34 +31,58 @@ class postschedulecontroller extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
-{
-    $schedules = $request->input('schedule');
-
-    if (!$schedules || !is_array($schedules)) {
-        return response()->json(['message' => 'No schedules provided.'], 422);
-    }
-
-    foreach ($schedules as $employeeId => $dates) {
-        foreach ($dates as $date => $shiftCode) {
-            if ($shiftCode === '') continue; // Skip empty selections
-
-            \App\Models\EmployeeSchedule::updateOrCreate(
-                [
-                    'employee_id' => $employeeId,
-                    'date' => $date
-                ],
-                [
-                    'shift_code' => $shiftCode
-                ]
-            );
+    private function getLeaveTypeName(?int $leaveTypeId): ?string
+    {
+        if (is_null($leaveTypeId)) {
+            return null;
         }
+
+        $leaveType = LeaveType::find($leaveTypeId);
+
+        return $leaveType ? $leaveType->name : null;
     }
 
-    return response()->json(['message' => 'Schedule posted successfully!']);
-}
+    public function store(Request $request)
+    {
+        $schedules = $request->input('schedule');
 
-    
+        if (!$schedules || !is_array($schedules)) {
+            return response()->json(['message' => 'No schedules provided.'], 422);
+        }
+
+        foreach ($schedules as $employeeId => $dates) {
+            foreach ($dates as $date => $selectedOption) {
+                $actualShiftCode = null;
+                $leaveTypeId = null;
+
+                $leaveType = LeaveType::where('name', $selectedOption)->first();
+
+                if ($leaveType) {
+                    $leaveTypeId = $leaveType->id;
+                    $actualShiftCode = null;
+                } elseif ($selectedOption === '') {
+                    $actualShiftCode = null;
+                    $leaveTypeId = null;
+                } else {
+                    $actualShiftCode = $selectedOption;
+                    $leaveTypeId = null;
+                }
+
+                EmployeeSchedule::updateOrCreate(
+                    [
+                        'employee_id' => $employeeId,
+                        'date' => $date
+                    ],
+                    [
+                        'shift_code' => $actualShiftCode,
+                        'leave_type_id' => $leaveTypeId,
+                    ]
+                );
+            }
+        }
+
+        return response()->json(['message' => 'Schedules posted successfully!']);
+    }
 
     /**
      * Display the specified resource.
@@ -88,44 +115,47 @@ class postschedulecontroller extends Controller
     {
         //
     }
-    public function getScheduleData(Request $request)
+
+  public function getScheduleData(Request $request)
     {
         $from = $request->query('from');
         $to = $request->query('to');
         $department = $request->query('department');
-    
-        $query = \App\Models\Employee::query();
-    
+
+        $query = Employee::query();
+
         if ($department) {
             $query->whereRaw('LOWER(department) = ?', [strtolower($department)]);
         }
-    
+
         $employees = $query->get();
-    
+
         $result = [];
         foreach ($employees as $employee) {
             $result[] = [
-                'employee_id' => $employee->employee_id, // ✅ Needed for the form input name
+                'employee_id' => $employee->employee_id,
                 'name' => $employee->first_name . ' ' . $employee->last_name,
-                'schedules' => $employee->getShiftsBetween($from, $to), // ✅ matches JS key
+                // Directly use the getShiftsBetween method from the Employee model
+                'schedules' => $employee->getShiftsBetween($from, $to),
             ];
         }
-    
+
         return response()->json($result);
     }
-    
-    
-    
 
     public function getShifts()
     {
-        $shifts = \App\Models\Schedule::select('shift_code')
+        $regularShifts = Schedule::select('shift_code')
             ->distinct()
             ->whereNotNull('shift_code')
             ->pluck('shift_code');
-    
-        return response()->json($shifts);
+
+        // Fetch all leave type names
+        $leaveTypeNames = LeaveType::pluck('name');
+
+        // Combine them, ensure uniqueness, sort, and re-index the array
+        $allAvailableOptions = $regularShifts->merge($leaveTypeNames)->unique()->sort()->values();
+
+        return response()->json($allAvailableOptions);
     }
-    
-    
 }

@@ -12,7 +12,16 @@
     use App\Http\Controllers\Holiday\HolidayController;
     use App\Http\Controllers\Permission\PermissionController;
     use App\Http\Controllers\HomeController;
-    
+    use App\Http\Controllers\Overtime\OvertimeFilingController;
+    use App\Http\Controllers\Overtime\ManageOvertimeController;
+    use App\Http\Controllers\leave\LeaveFilingController;
+    use App\Http\Controllers\Leave\LeaveManagementController;
+    use App\Http\Controllers\Leave\LeaveCreditController;
+
+
+
+
+
 
     // Public route
     Route::get('/', function () {
@@ -114,16 +123,53 @@
          * =====================
          * Process DTR Routes
          * =====================
+         * 
          */
         Route::get('/HR/attendance/processdtr', [ProcessDTRController::class, 'index'])->name('HR.attendance.processdtr');
         Route::get('/attendance/processdata', [ProcessDTRController::class, 'getProcessedDTR'])->name('attendance.processdata');
         Route::post('/payroll/processdtr', [ProcessDTRController::class, 'store'])->name('processdtr.store');
        Route::resource('payroll/process-dtr', ProcessDTRController::class)->names([
     'index' => 'payroll.process-dtr.index',
-    'store' => 'payroll.process-dtr.store',]);
+    'store' => 'payroll.process-dtr.store',]); });
 
-        
+    //Overtime
+    Route::get('/HR/overtime/overtime_filing', [OvertimeFilingController::class, 'index'])->name('HR.overtime.overtime_filing'); 
+    Route::post('HR/overtime/store', [OvertimeFilingController::class, 'store'])->name('overtime.store');
+    Route::get('/HR/overtime/manage_overtime', [ManageOvertimeController::class, 'index'])->name('HR.overtime.manage_overtime'); 
+    Route::prefix('overtime')->group(function () {
+        Route::get('/data', [ManageOvertimeController::class, 'data'])->name('overtime.data');
+        Route::post('/approve/{id}', [ManageOvertimeController::class, 'approve'])->name('overtime.approve');
+        Route::post('/disapprove/{id}', [ManageOvertimeController::class, 'disapprove'])->name('overtime.disapprove');
+        Route::post('/update/{id}', [ManageOvertimeController::class, 'update'])->name('overtime.update');
     });
+
+
+    //leave
+    Route::get('/HR/leave/leave_filing', [LeaveFilingController::class, 'index'])->name('HR.leave.leave_filing');
+    Route::get('/leave/file', [LeaveFilingController::class, 'create'])->name('leave.create');
+    Route::post('/leave', [LeaveFilingController::class, 'store'])->name('leave.store');
+
+    //leave management
+    Route::prefix('HR/leave')->name('leavemgt.')->group(function () {
+            Route::get('/leave_manage', [LeaveManagementController::class, 'index'])->name('index');
+            Route::get('/data', [LeaveManagementController::class, 'data'])->name('data');
+            Route::post('/approve/{id}', [LeaveManagementController::class, 'approve'])->name('approve');
+            Route::post('/disapprove/{id}', [LeaveManagementController::class, 'disapprove'])->name('disapprove');
+            Route::post('/update/{id}', [LeaveManagementController::class, 'update'])->name('update');
+            // Route::post('/store', [LeaveManagementController::class, 'store'])->name('store');
+        });
+    Route::get('/HR/leave/types', [LeaveManagementController::class, 'getLeaveTypes'])->name('leave.types');
+    Route::get('/api/leave-credits/{employee_id}', [LeaveFilingController::class, 'getLeaveCredits']);
+    
+    //leavecredit
+    Route::prefix('HR/leave')->name('leave_credit.')->group(function () {
+    Route::get('/leave_credit', [LeaveCreditController::class, 'index'])->name('index');
+    Route::post('/store', [LeaveCreditController::class, 'store'])->name('store');
+    });
+    Route::get('/api/employees/search', [EmployeeSearchController::class, 'search'])->name('api.employees.search');
+    Route::get('/api/leave_types/search', [LeaveTypeSearchController::class, 'search'])->name('api.leave_types.search');
+
+
 
     // Authentication routes (login, register, etc.)
     require __DIR__.'/auth.php';
