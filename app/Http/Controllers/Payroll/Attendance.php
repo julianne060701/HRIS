@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Carbon\Carbon;
 
 class Attendance extends Controller
 {
@@ -27,6 +28,7 @@ class Attendance extends Controller
     {
         //
     }
+    
 
     /**
      * Store a newly created resource in storage.
@@ -34,8 +36,6 @@ class Attendance extends Controller
     public function store(Request $request)
 {
     $attendanceData = $request->input('attendance_data');
-
-     dd($attendanceData);
 
     if (!empty($attendanceData)) {
         foreach ($attendanceData as $attendance) {
@@ -47,13 +47,13 @@ class Attendance extends Controller
                 'time_out'    => 'nullable|date_format:H:i:s',
             ])->validate();
             
-            $exists = DTR::where('employee_id', $validated['employee_id'])
+            $exists = DTR::where('id', $validated['id'])
              ->where('transindate', $validated['transindate'])
              ->exists();
 
             if (!$exists) {
                 DTR::create([
-                    // 'id'          => $validated['id'],
+                    'id'          => $validated['id'],
                     'employee_id' => $validated['employee_id'],
                     'transindate'   => $validated['transindate'],
                     'time_in'     => $validated['time_in'] ?? null,
@@ -72,37 +72,37 @@ class Attendance extends Controller
 }
 
 
-//     public function storeAttendanceData(Request $request)
-// {
-//     // Get the attendance data from the request
-//     $attendanceData = $request->input('attendance_data');
+    public function storeAttendanceData(Request $request)
+{
+    // Get the attendance data from the request
+    $attendanceData = $request->input('attendance_data');
 
-//     // Check if there's any data
-//     if (!empty($attendanceData)) {
-//         foreach ($attendanceData as $attendance) {
-//             // Validate each attendance record
-//             $validated = Validator::make($attendance, [
-//                 'employee_id' => 'required|integer|exists:employees,id',
-//                 'transdate'   => 'required|date',
-//                 'time_in'     => 'nullable|date_format:H:i:s',
-//                 'time_out'    => 'nullable|date_format:H:i:s',
-//             ])->validate();
+    // Check if there's any data
+    if (!empty($attendanceData)) {
+        foreach ($attendanceData as $attendance) {
+            // Validate each attendance record
+            $validated = Validator::make($attendance, [
+                'employee_id' => 'required|integer|exists:employees,id',
+                'transdate'   => 'required|date',
+                'time_in'     => 'nullable|date_format:H:i:s',
+                'time_out'    => 'nullable|date_format:H:i:s',
+            ])->validate();
 
-//             // Optional: Check for duplicates before inserting
-//             $exists = DTR::where('employee_id', $validated['employee_id'])
-//                          ->where('transdate', $validated['transdate'])
-//                          ->exists();
+            // Optional: Check for duplicates before inserting
+            $exists = DTR::where('employee_id', $validated['employee_id'])
+                         ->where('transdate', $validated['transdate'])
+                         ->exists();
 
-//             if (!$exists) {
-//                 DTR::create($validated);
-//             }
-//         }
+            if (!$exists) {
+                DTR::create($validated);
+            }
+        }
 
-//         return response()->json(['status' => 'success', 'message' => 'Attendance data stored successfully!']);
-//     }
+        return response()->json(['status' => 'success', 'message' => 'Attendance data stored successfully!']);
+    }
 
-//     return response()->json(['status' => 'error', 'message' => 'No data provided.']);
-// }
+    return response()->json(['status' => 'error', 'message' => 'No data provided.']);
+}
 
     /**
      * Display the specified resource.
@@ -115,7 +115,7 @@ class Attendance extends Controller
     $maxDate = $request->input('maxDate');
 
     $query = DB::table('attendance')
-    ->select('id','employee_id', 'transindate', 'time_in', 'transoutdate', 'time_out');
+    ->select('id','employee_id', 'transindate', 'time_in', 'transoutdate', 'time_out', 'total_hours');
 
 
     // Apply date filters if provided
@@ -132,7 +132,7 @@ public function importFromAttendance(Request $request)
     $maxDate = $request->input('maxDate');
 
     $query = DB::table('attendance')
-        ->select('id','employee_id', 'transindate', 'time_in', 'transoutdate', 'time_out');  // added transoutdate
+        ->select('id', 'employee_id', 'transindate', 'time_in', 'transoutdate', 'time_out');
 
     if ($minDate && $maxDate) {
         $query->whereBetween('transindate', [$minDate, $maxDate]);
@@ -141,19 +141,28 @@ public function importFromAttendance(Request $request)
     $attendanceData = $query->get();
 
     foreach ($attendanceData as $row) {
-         $exists = DB::table('dtr')
-            ->where('employee_id', $row->employee_id)
-            ->where('transindate', $row->transindate) 
+        $exists = DB::table('dtr')
+            ->where('id', $row->id)
             ->exists();
 
         if (!$exists) {
+            // Calculate total_hours using Carbon
+            $totalHours = 0;
+            if ($row->time_in && $row->time_out) {
+                $timeIn  = Carbon::parse($row->transindate . ' ' . $row->time_in);
+                $timeOut = Carbon::parse($row->transoutdate . ' ' . $row->time_out);
+                $totalHours = $timeOut->floatDiffInHours($timeIn);
+            }
+
             DB::table('dtr')->insert([
-                // 'id'           => $row -> id,
+                'id'           => $row->id,
                 'employee_id'  => $row->employee_id,
                 'transindate'  => $row->transindate,
                 'time_in'      => $row->time_in ?? null,
                 'transoutdate' => $row->transoutdate,
                 'time_out'     => $row->time_out ?? null,
+                'total_hours'  => round($totalHours, 2),
+                'night_diff' => 0,
                 'created_at'   => now(),
                 'updated_at'   => now(),
             ]);
@@ -162,9 +171,10 @@ public function importFromAttendance(Request $request)
 
     return response()->json([
         'status' => 'success',
-        'message' => 'Attendance data successfully imported into DTR.'
+        'message' => 'Attendance data successfully imported into DTR with calculated total hours.'
     ]);
 }
+
 
     /**
      * Show the form for editing the specified resource.

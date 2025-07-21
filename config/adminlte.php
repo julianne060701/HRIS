@@ -419,11 +419,14 @@ return [
                     'url'  => 'HR/attendance/processdtr',
                     'icon' => 'fas fa-cogs',
                 ],
-                [
-                    'text' => 'Schedule',
-                    'url'  => 'payroll/deductions',
-                    'icon' => 'fas fa-calendar-alt',
-                    'submenu' => [
+            ],
+        ],
+        [
+            'text' => 'Schedule',
+            'url'  => 'payroll/deductions',
+            'icon' => 'fas fa-calendar-alt',
+            'submenu' => 
+            [
                         [
                             'text' => 'Plot Schedule',
                             'url'  => 'HR/attendance/postsched',
@@ -434,12 +437,42 @@ return [
                             'url'=> 'HR/attendance/create_sched',
                             'icon' => 'fas fa-plus-square',
                         ],
-                    ],
+            ],
           
+        ],
+        [
+            'text' => 'Leave Management',
+            'icon' => 'fas fa-calendar-alt',
+            'submenu' => [
+                [
+                    'text' => 'File Leave',
+                    'url'  => 'HR/leave/leave_filing',
                 ],
+                [
+                    'text' => 'Leave Creditialing',
+                    'url'  => 'HR/leave/leave_credit  ',
+                ], 
+                [
+                    'text' => 'Leave',
+                    'url'  => 'HR/leave/leave_manage  ',
+                ],              
             ],
         ],
-        
+        [
+            'text' => 'Overtime Management  ',
+            'icon' => 'fas fa-calendar-alt',
+            'submenu' => [
+                [
+                    'text' => 'File Overtime',
+                    'url'  => 'HR/overtime/overtime_filing',
+                ],
+                [
+                    'text' => 'Overtime',
+                    'url'  => 'HR/overtime/manage_overtime  ',
+                ],              
+            ],
+        ],
+
         [
             'text' => 'Holidays',
             'icon' => 'fas fa-calendar-alt',

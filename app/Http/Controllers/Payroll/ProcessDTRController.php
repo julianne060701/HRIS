@@ -6,11 +6,13 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Log; // Import Log facade for logging
-use App\Models\DTR; // Assuming this model maps to your processed_dtr or employee_dtr table
-use App\Models\Employee; // Used for employee details, good to keep
-use App\Models\Schedule; // Assuming you have a Schedule model for shift details
-use Carbon\Carbon; // Ensure Carbon is imported
+
+use App\Models\DTR;
+use App\Models\Employee;
+use App\Models\Holiday;
+use Carbon\Carbon;
+use App\Models\LeaveType;
+use Illuminate\Support\Facades\Log;
 
 class ProcessDTRController extends Controller
 {
@@ -19,194 +21,367 @@ class ProcessDTRController extends Controller
      */
     public function index(Request $request)
     {
-        // This method is for displaying combined raw schedule and attendance data.
-        // The calculations for late/undertime happen in the 'store' method,
-        // and the 'getProcessedDTR' method would display the results of those calculations.
+        $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->toDateString());
+        $endDate = $request->input('end_date', Carbon::now()->endOfMonth()->toDateString());
+
         $data = DB::table('employee_schedules')
             ->select(
                 'employee_schedules.employee_id',
                 'employee_schedules.shift_code',
                 DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) AS employee_name"),
                 'employee_schedules.date',
-                'schedule.xptd_time_in AS plotted_time_in', // Expected time in from schedule
-                'schedule.xptd_time_out AS plotted_time_out', // Expected time out from schedule
-                'attendance.time_in AS actual_time_in',      // Actual time in from attendance
-                'attendance.time_out AS actual_time_out'     // Actual time out from attendance
+                'schedule.xptd_time_in AS plotted_time_in',
+                'schedule.xptd_time_out AS plotted_time_out',
+                'attendance.time_in AS actual_time_in',
+                'attendance.time_out AS actual_time_out',
+                'leave_types.name AS leave_type_name',
+                'employee_schedules.leave_type_id'
             )
             ->leftJoin('employees', 'employee_schedules.employee_id', '=', 'employees.employee_id')
-            ->leftJoin('schedule', 'employee_schedules.shift_code', '=', 'schedule.shift_code')
+            ->leftJoin('schedule', function ($join) {
+                // Ensure the join condition is robust against leading/trailing spaces
+                $join->on(DB::raw('TRIM(employee_schedules.shift_code)'), '=', DB::raw('TRIM(schedule.shift_code)'));
+            })
             ->leftJoin('attendance', function ($join) {
-                // Join attendance records for the specific employee and date
                 $join->on('employee_schedules.employee_id', '=', 'attendance.employee_id')
                     ->whereRaw('DATE(attendance.transindate) = employee_schedules.date');
             })
-            ->orderByDesc('employee_schedules.date') // Order by date descending
+            ->leftJoin('leave_types', 'employee_schedules.leave_type_id', '=', 'leave_types.id')
+            ->whereBetween('employee_schedules.date', [$startDate, $endDate]) // Filter by date range
+            ->orderByDesc('employee_schedules.date')
             ->get();
-        
+
         return view('HR.attendance.processdtr', ['data' => $data]);
     }
-    
+
     /**
      * Show the form for creating a new resource.
      */
     public function create()
     {
-        // Not implemented for this controller's primary function
+        //
     }
 
     /**
-     * Store a newly created resource in storage (or update existing).
-     * This method processes raw DTR data to calculate lates and undertime.
+     * Helper function to calculate night differential minutes for a given time range.
+     * This function now calculates the total night differential minutes *within that range*,
+     * without considering holidays. The holiday classification will happen in the store method.
+     * @param Carbon|null $startTime Carbon instance of the start time (with date context)
+     * @param Carbon|null $endTime Carbon instance of the end time (with date context)
+     * @return int Night differential minutes (always non-negative)
+     */
+    private function calculateNightDifferentialMinutes(?Carbon $startTime, ?Carbon $endTime): int
+    {
+        if (!$startTime || !$endTime) {
+            return 0;
+        }
+
+        $start = $startTime->copy();
+        $end = $endTime->copy();
+
+        if ($end->lt($start)) {
+            $end->addDay(); // Ensure end is after start for accurate duration
+        }
+
+        $totalNightDiffMinutes = 0;
+
+        // Iterate through days covered by the shift
+        $current = $start->copy()->startOfDay();
+        while ($current->lte($end->copy()->startOfDay())) {
+            $nightStartOfDay = $current->copy()->setTime(22, 0, 0); // 10 PM on current day
+            $nightEndOfDay = $current->copy()->addDay()->setTime(6, 0, 0); // 6 AM on next day
+
+            // Determine overlap with the shift
+            $overlapStart = $start->max($nightStartOfDay);
+            $overlapEnd = $end->min($nightEndOfDay);
+
+            if ($overlapStart->lt($overlapEnd)) {
+                $totalNightDiffMinutes += $overlapEnd->diffInMinutes($overlapStart);
+            }
+
+            $current->addDay(); // Move to the next day
+        }
+
+        return abs($totalNightDiffMinutes);
+    }
+
+    /**
+     * Helper function to get the "total_hours" value for leave types.
+     * This uses a hardcoded mapping.
+     *
+     * @param string $leaveTypeName The name of the leave type.
+     * @return float The hours to credit/deduct for the leave, or 0.0 if not found.
+     */
+    private function getLeaveDeductionHours(string $leaveTypeName): float
+    {
+        $leaveHoursMapping = [
+            'Absent Leave' => 0.0,
+            'Vacation Leave Without Pay' => 0.0,
+            'Sick Leave Without Pay' => 0.0,
+            'Maternity Leave' => 0.0,
+            'Suspension' => 0.0,
+
+            'Vacation Leave' => 8.0,
+            'Sick Leave' => 8.0,
+            'Paternity Leave' => 8.0,
+            'Bereavement Leave' => 8.0,
+            'Birthday Leave' => 8.0,
+            'Emergency Leave' => 8.0,
+            'Solo Parent Leave' => 8.0,
+
+            'Vacation Leave AM' => 4.0,
+            'Vacation Leave PM' => 4.0,
+            'Sick Leave AM' => 4.0,
+            'Sick Leave PM' => 4.0,
+            'Emergency Leave AM' => 4.0,
+            'Emergency Leave PM' => 4.0,
+        ];
+
+        if (!array_key_exists($leaveTypeName, $leaveHoursMapping)) {
+            Log::warning("Undefined leave type '{$leaveTypeName}' encountered. Defaulting to 0 hours for DTR.");
+        }
+        return $leaveHoursMapping[$leaveTypeName] ?? 0.0;
+    }
+
+
+    /**
+     * Store a newly created resource in storage.
      */
     public function store(Request $request)
     {
-        // Validate incoming DTR data from the form
         $validated = $request->validate([
-            'dtrs.*.employee_id'     => 'required|exists:employees,employee_id',
-            'dtrs.*.date'            => 'required|date',
-            'dtrs.*.time_in'         => 'nullable|date_format:H:i:s', // Actual time in
-            'dtrs.*.time_out'        => 'nullable|date_format:H:i:s', // Actual time out
-            'dtrs.*.shift_code'      => 'nullable|string|max:20',
-            'dtrs.*.xptd_time_in'    => 'nullable|date_format:H:i:s', // Expected time in from form (or fetched)
-            'dtrs.*.xptd_time_out'   => 'nullable|date_format:H:i:s', // Expected time out from form (or fetched)
+            'dtrs.*.employee_id' => 'required|exists:employees,employee_id',
+            'dtrs.*.date' => 'required|date',
+            'dtrs.*.time_in' => 'nullable|date_format:H:i:s',
+            'dtrs.*.time_out' => 'nullable|date_format:H:i:s',
+            'dtrs.*.shift_code' => 'nullable|string|max:20',
+            'dtrs.*.xptd_time_in' => 'nullable|date_format:H:i:s',
+            'dtrs.*.xptd_time_out' => 'nullable|date_format:H:i:s',
+            'dtrs.*.leave_type_id' => 'nullable|integer|exists:leave_types,id',
         ]);
 
         $dtrs = $request->input('dtrs', []);
-        $gracePeriodMinutes = 10; // Define your grace period here, e.g., 10 minutes
+
+        // Define the grace period in minutes
+        $lateGracePeriodMinutes = 1;
 
         foreach ($dtrs as $dtr) {
             $employeeId = $dtr['employee_id'];
-            $date = Carbon::parse($dtr['date'])->toDateString(); // Ensure date is 'YYYY-MM-DD'
+            $baseDate = Carbon::parse($dtr['date']);
 
-            // Clean input: Convert empty strings to null for consistent handling
-            $actualTimeInRaw = empty($dtr['time_in']) ? null : $dtr['time_in'];
-            $actualTimeOutRaw = empty($dtr['time_out']) ? null : $dtr['time_out'];
-            $plottedTimeInRaw = empty($dtr['xptd_time_in']) ? null : $dtr['xptd_time_in'];
-            $plottedTimeOutRaw = empty($dtr['xptd_time_out']) ? null : $dtr['xptd_time_out'];
-            $shiftCode = $dtr['shift_code'] ?: null;
+            $shiftCodeFromForm = $dtr['shift_code'] ?: null; // Original shift_code from employee_schedules
+            $leaveTypeId = $dtr['leave_type_id'] ?? null;
 
-            // Fallback: If plotted (expected) times are missing from the form, fetch from DB using shift_code
-            if ((!$plottedTimeInRaw || !$plottedTimeOutRaw) && $shiftCode) {
-                $scheduleData = DB::table('schedule') // Assuming 'schedule' table holds shift details
-                    ->where('shift_code', $shiftCode)
+            $actualTimeIn = $dtr['time_in'] ?: null;
+            $actualTimeOut = $dtr['time_out'] ?: null;
+
+            $expectedIn = $dtr['xptd_time_in'] ?: null;
+            $expectedOut = $dtr['xptd_time_out'] ?: null;
+
+            // Fallback for expected times if not already passed from the form
+            if ((!$expectedIn || !$expectedOut) && $shiftCodeFromForm) {
+                $scheduleData = DB::table('schedule')
+                    ->whereRaw('TRIM(shift_code) = ?', [trim($shiftCodeFromForm)])
                     ->select('xptd_time_in', 'xptd_time_out')
                     ->first();
 
                 if ($scheduleData) {
-                    $plottedTimeInRaw = $scheduleData->xptd_time_in;
-                    $plottedTimeOutRaw = $scheduleData->xptd_time_out;
-                } else {
-                    Log::warning("No schedule found for shift_code: {$shiftCode} on {$date} for employee: {$employeeId}. Cannot calculate lates/undertime.");
-                    // You might want to skip processing this record or mark it as needing review
-                    continue; 
+                    $expectedIn = $expectedIn ?: $scheduleData->xptd_time_in;
+                    $expectedOut = $expectedOut ?: $scheduleData->xptd_time_out;
                 }
             }
 
-            $lateMinutes = 0;
-            $undertimeMinutes = 0;
-            $totalWorkMinutes = 0;
+            // --- Initialize Carbon objects ---
+            $actualTimeInCarbon = $actualTimeIn ? Carbon::parse($baseDate->toDateString() . ' ' . $actualTimeIn) : null;
+            $actualTimeOutCarbon = $actualTimeOut ? Carbon::parse($baseDate->toDateString() . ' ' . $actualTimeOut) : null;
+
+            if ($actualTimeInCarbon && $actualTimeOutCarbon && $actualTimeOutCarbon->lt($actualTimeInCarbon)) {
+                $actualTimeOutCarbon->addDay();
+            }
+
+            $expectedTimeInCarbon = $expectedIn ? Carbon::parse($baseDate->toDateString() . ' ' . $expectedIn) : null;
+            $expectedTimeOutCarbon = $expectedOut ? Carbon::parse($baseDate->toDateString() . ' ' . $expectedOut) : null;
+
+            if ($expectedTimeInCarbon && $expectedTimeOutCarbon && $expectedTimeOutCarbon->lt($expectedTimeInCarbon)) {
+                $expectedTimeOutCarbon->addDay();
+            }
+            // --- End Initialization ---
+
             $isLate = false;
+            $lateMinutes = 0;
             $isUndertime = false;
+            $undertimeMinutes = 0;
+            $totalHours = 0; // Initialize total_hours to 0
+            $totalMinutesWorked = 0;
 
-            // --- Carbon Parsing and Initializing Time Objects ---
-            // Create Carbon objects for calculations. Crucially, include the date for correct time comparisons,
-            // especially for shifts that span midnight.
-            $actualTimeIn = $actualTimeInRaw ? Carbon::parse($date . ' ' . $actualTimeInRaw) : null;
-            $actualTimeOut = $actualTimeOutRaw ? Carbon::parse($date . ' ' . $actualTimeOutRaw) : null;
-            $plottedTimeIn = $plottedTimeInRaw ? Carbon::parse($date . ' ' . $plottedTimeInRaw) : null;
-            $plottedTimeOut = $plottedTimeOutRaw ? Carbon::parse($date . ' ' . $plottedTimeOutRaw) : null;
+            $nightDiffRegMinutes = 0;
+            $nightDiffSpecMinutes = 0;
+            $nightDiffMinutes = 0;
 
-            // --- Handle Overnight Shifts for Plotted Times ---
-            // If plotted time out is earlier than plotted time in, it means the shift spans midnight.
-            if ($plottedTimeIn && $plottedTimeOut && $plottedTimeOut->lt($plottedTimeIn)) {
-                $plottedTimeOut->addDay();
-            }
+            $accumulatedRegHolidayHours = 0.0;
+            $accumulatedSpecHolidayHours = 0.0;
 
-            // --- Handle Overnight Shifts for Actual Times ---
-            // If actual time out is earlier than actual time in, it means the employee worked past midnight.
-            if ($actualTimeIn && $actualTimeOut && $actualTimeOut->lt($actualTimeIn)) {
-                $actualTimeOut->addDay();
-            }
-            
-            // --- Lateness Calculation ---
-            if ($actualTimeIn && $plottedTimeIn) {
-                if ($actualTimeIn->greaterThan($plottedTimeIn)) {
-                    $lateness = $actualTimeIn->diffInMinutes($plottedTimeIn);
-                    if ($lateness > $gracePeriodMinutes) {
+            // --- Determine the shift_code to store in the DTR table for THIS DTR entry ---
+            // Start by assuming it's the schedule's shift code
+            $shiftCodeToStore = $shiftCodeFromForm;
+
+            Log::info("Processing DTR for Employee ID: {$employeeId} on Date: {$baseDate->toDateString()}");
+            Log::info("Shift Code (from form): {$shiftCodeFromForm}, Expected In: {$expectedIn}, Expected Out: {$expectedOut}, Leave Type ID: {$leaveTypeId}");
+
+
+            if ($leaveTypeId) {
+                $leaveType = LeaveType::find($leaveTypeId);
+                if ($leaveType) {
+                    // If on leave, set the shiftCodeToStore to the leave type name
+                    $shiftCodeToStore = $leaveType->name;
+
+                    // Use the getLeaveDeductionHours function to determine total_hours for this leave type
+                    $totalHours = $this->getLeaveDeductionHours($leaveType->name);
+                }
+
+                // Zero out other time-related calculations for leave days
+                $lateMinutes = 0;
+                $undertimeMinutes = 0;
+                $nightDiffMinutes = 0;
+                $nightDiffRegMinutes = 0;
+                $nightDiffSpecMinutes = 0;
+                $accumulatedRegHolidayHours = 0.0;
+                $accumulatedSpecHolidayHours = 0.0;
+                // Also set actual time in/out to null for leave days if they were somehow populated
+                $actualTimeIn = null;
+                $actualTimeOut = null;
+
+
+                Log::info("Employee is on leave (ID: {$leaveTypeId}, Name: " . ($shiftCodeToStore ?? 'N/A') . "). Setting total_hours to leave type's deduction hours: {$totalHours}.");
+
+            } else {
+                // Normal processing for non-leave days
+                // Calculate Lateness with Grace Period
+                if ($actualTimeInCarbon && $expectedTimeInCarbon) {
+                    $expectedTimeInWithGrace = $expectedTimeInCarbon->copy()->addMinutes($lateGracePeriodMinutes);
+
+                    if ($actualTimeInCarbon->gt($expectedTimeInWithGrace)) {
                         $isLate = true;
-                        // Deduct grace period from total lateness
-                        $lateMinutes = $lateness - $gracePeriodMinutes;
+                        $lateMinutes = $actualTimeInCarbon->diffInMinutes($expectedTimeInCarbon);
+                    } else {
+                        $isLate = false;
+                        $lateMinutes = 0;
                     }
                 }
-            } else {
-                Log::warning("Cannot calculate lateness for employee: {$employeeId} on {$date} due to missing actual or plotted time in.");
-            }
 
-            // --- Total Work Minutes Calculation ---
-            // Calculate total time between actual clock-in and clock-out.
-            // Further logic for deducting unpaid breaks would go here if needed.
-            if ($actualTimeIn && $actualTimeOut) {
-                $totalWorkMinutes = $actualTimeIn->diffInMinutes($actualTimeOut);
-            } else {
-                 Log::warning("Cannot calculate total work minutes for employee: {$employeeId} on {$date} due to missing actual time in/out.");
-            }
-
-
-            // --- Undertime Calculation ---
-            // Undertime occurs if total actual work minutes are less than total plotted work minutes,
-            // or if the employee clocks out significantly before scheduled end.
-            if ($actualTimeIn && $actualTimeOut && $plottedTimeIn && $plottedTimeOut) {
-                $plottedWorkMinutes = $plottedTimeIn->diffInMinutes($plottedTimeOut);
-                
-                // Scenario 1: Actual total work hours are less than scheduled total work hours
-                if ($totalWorkMinutes < $plottedWorkMinutes) {
-                    $undertimeMinutes = $plottedWorkMinutes - $totalWorkMinutes;
-                    $isUndertime = true;
+                // Calculate Undertime
+                if ($actualTimeOutCarbon && $expectedTimeOutCarbon) {
+                    try {
+                        if ($actualTimeOutCarbon->lt($expectedTimeOutCarbon)) {
+                            $isUndertime = true;
+                            $undertimeMinutes = $expectedTimeOutCarbon->diffInMinutes($actualTimeOutCarbon);
+                        } else {
+                            $isUndertime = false;
+                            $undertimeMinutes = 0;
+                        }
+                    } catch (\Exception $e) {
+                        report($e);
+                        $undertimeMinutes = 0;
+                        $isUndertime = false;
+                        Log::error("Error during undertime calculation: " . $e->getMessage());
+                    }
                 }
-                
-                // Scenario 2 (Optional, for explicit early clock-out):
-                // If actual time out is before plotted time out (and not just accounted for by totalWorkMinutes)
-                // You might need to refine this based on your specific undertime rules.
-                // For example, if totalWorkMinutes already accounts for early leaving, this might be redundant.
-                // if ($actualTimeOut->lt($plottedTimeOut)) {
-                //     $undertimeFromEarlyOut = $plottedTimeOut->diffInMinutes($actualTimeOut);
-                //     $undertimeMinutes = max($undertimeMinutes, $undertimeFromEarlyOut); // Take the greater if multiple rules
-                //     $isUndertime = true;
-                // }
 
-            } else {
-                Log::warning("Cannot calculate undertime for employee: {$employeeId} on {$date} due to missing actual or plotted times.");
-            }
+                // --- Main Time Calculation Loop: Regular Hours, Holiday Hours, and Night Differential ---
+                if ($actualTimeInCarbon && $actualTimeOutCarbon) {
+                    $currentMinute = $actualTimeInCarbon->copy();
+                    $totalMinutesWorked = 0;
+                    $hourFraction = 1 / 60.0;
 
-            try {
-                DTR::updateOrCreate(
-                    [
-                        'employee_id' => $employeeId,
-                        'date' => $date, 
-                    ],
-                    [
-                        'plotted_time_in'    => $plottedTimeInRaw,    
-                        'plotted_time_out'   => $plottedTimeOutRaw,   
-                        'actual_time_in'     => $actualTimeInRaw,     
-                        'late_minutes'       => $lateMinutes,
-                        'undertime_minutes'  => $undertimeMinutes,
-                        'total_work_minutes' => $totalWorkMinutes, 
-                        'is_late'            => $isLate,
-                        'is_undertime'       => $isUndertime,
-                        'updated_at'         => now(),
-                        // 'transindate' and 'transoutdate' are likely 'date' in your processed DTR table
-                        // If 'DTR' model is also used for raw import, you might need separate models/tables.
-                        // Assuming 'date' in the processed DTR table covers both `transindate` and `transoutdate` for a single day's record.
-                    ]
-                );
-            } catch (\Exception $e) {
-                Log::error("Failed to update/create processed DTR for employee: {$employeeId} on {$date}. Error: " . $e->getMessage());
-                // Consider adding to an errors array to return to the user if needed
-            }
+                    $ndWindowStartHour = 22; // 10 PM
+                    $ndWindowEndHour = 6;    // 6 AM
+
+                    while ($currentMinute->lt($actualTimeOutCarbon)) {
+                        $minuteDate = $currentMinute->toDateString();
+                        $holidayForMinute = Holiday::where('date', $minuteDate)->first();
+                        $isMinuteOnRegularHoliday = ($holidayForMinute && $holidayForMinute->type === 'REGULAR HOLIDAY');
+                        $isMinuteOnSpecialHoliday = ($holidayForMinute && $holidayForMinute->type === 'SPECIAL NON-WORKING HOLIDAY');
+
+                        $currentHour = $currentMinute->hour;
+                        $isWithinNDWindow = ($currentHour >= $ndWindowStartHour || $currentHour < $ndWindowEndHour);
+
+                        if ($isMinuteOnRegularHoliday) {
+                            $accumulatedRegHolidayHours += $hourFraction;
+                        } elseif ($isMinuteOnSpecialHoliday) {
+                            $accumulatedSpecHolidayHours += $hourFraction;
+                        }
+
+                        if ($isWithinNDWindow) {
+                            if ($isMinuteOnRegularHoliday) {
+                                $nightDiffRegMinutes++;
+                            } elseif ($isMinuteOnSpecialHoliday) {
+                                $nightDiffSpecMinutes++;
+                            } else {
+                                $nightDiffMinutes++;
+                            }
+                        }
+
+                        $totalMinutesWorked++;
+                        $currentMinute->addMinute();
+                    }
+
+                    $totalHours = round($totalMinutesWorked / 60, 2);
+
+                    Log::info("Calculated totalMinutesWorked: {$totalMinutesWorked}");
+                    Log::info("Calculated totalHours (total actual duration): {$totalHours}");
+
+                } else {
+                    Log::info("Main time calculation loop: Not enough data (missing actual times).");
+                }
+            } // End of else (not on leave) condition
+
+            // --- Ensure all magnitude-based values are non-negative before saving ---
+            $lateMinutes = abs($lateMinutes);
+            $undertimeMinutes = abs($undertimeMinutes);
+
+            // Logging final values for debugging
+            Log::info("Final values for updateOrCreate for {$employeeId} on {$baseDate->toDateString()}:");
+            Log::info(" Total Hours: " . $totalHours);
+            Log::info(" Reg Holiday Hours: " . round($accumulatedRegHolidayHours, 2));
+            Log::info(" Spec Holiday Hours: " . round(abs($accumulatedSpecHolidayHours), 2));
+            Log::info(" Night Diff (Normal, minutes): " . $nightDiffMinutes);
+            Log::info(" Night Diff Reg (minutes): " . $nightDiffRegMinutes);
+            Log::info(" Night Diff Spec (minutes): " . $nightDiffSpecMinutes);
+            Log::info("   Leave Type ID (to save): " . ($leaveTypeId ?? 'NULL'));
+            Log::info("   Shift Code to Store: " . ($shiftCodeToStore ?? 'NULL')); // Now this should be correct
+
+            DTR::updateOrCreate(
+                [
+                    'employee_id' => $employeeId,
+                    'transindate' => $baseDate->toDateString(),
+                ],
+                [
+                    'time_in' => $actualTimeIn, // Will be null if on leave
+                    'time_out' => $actualTimeOut, // Will be null if on leave
+                    'transoutdate' => $actualTimeOutCarbon ? $actualTimeOutCarbon->toDateString() : null,
+                    'shift_code' => $shiftCodeToStore, // This is now correctly set per DTR entry
+                    'xptd_time_in' => $expectedIn,
+                    'xptd_time_out' => $expectedOut,
+                    'is_late' => $isLate,
+                    'late_minutes' => $lateMinutes,
+                    'is_undertime' => $isUndertime,
+                    'undertime_minutes' => $undertimeMinutes,
+                    'total_hours' => $totalHours, // This will now be the leave type's default hours if on leave
+                    'overtime_minutes' => 0,
+                    'night_diff' => round(abs($nightDiffMinutes) / 60, 2),
+                    'night_diff_reg' => round(abs($nightDiffRegMinutes) / 60, 2),
+                    'night_diff_spec' => round(abs($nightDiffSpecMinutes) / 60, 2),
+                    'reg_holiday_hours' => round(abs($accumulatedRegHolidayHours), 2),
+                    'spec_holiday_hours' => round(abs($accumulatedSpecHolidayHours), 2),
+                    'reg_holiday_ot_minutes' => 0,
+                    'spec_holiday_ot_minutes' => 0,
+                    'leave_type_id' => $leaveTypeId,
+                    'updated_at' => now(),
+                ]
+            );
         }
 
-        // Redirect back with a success message
-        return redirect()->back()->with('success', 'DTR records processed and calculations updated successfully!');
+        return redirect()->back()->with('success', 'DTR records processed successfully!');
     }
 
     /**
@@ -214,7 +389,7 @@ class ProcessDTRController extends Controller
      */
     public function show(string $id)
     {
-        // Not implemented for this controller's primary function
+        //
     }
 
     /**
@@ -222,7 +397,7 @@ class ProcessDTRController extends Controller
      */
     public function edit(string $id)
     {
-        // Not implemented for this controller's primary function
+        //
     }
 
     /**
@@ -230,7 +405,7 @@ class ProcessDTRController extends Controller
      */
     public function update(Request $request, string $id)
     {
-        // Not implemented for this controller's primary function
+        //
     }
 
     /**
@@ -238,51 +413,6 @@ class ProcessDTRController extends Controller
      */
     public function destroy(string $id)
     {
-        // Not implemented for this controller's primary function
-    }
-
-    /**
-     * Get processed DTR data (for DataTables).
-     * This method fetches data from the table where calculations are stored.
-     */
-    public function getProcessedDTR(Request $request)
-    {
-        try {
-            
-            $query = DB::table('employee_dtr') 
-                ->join('employees', 'employee_dtr.employee_id', '=', 'employees.employee_id') // Use employee_id for join
-                ->select(
-                    'employee_dtr.employee_id',
-                    DB::raw("CONCAT(COALESCE(employees.first_name, ''), ' ', COALESCE(employees.last_name, '')) AS employee_name"),
-                    'employee_dtr.date',
-                    'employee_dtr.plotted_time_in',
-                    'employee_dtr.plotted_time_out',
-                    'employee_dtr.actual_time_in',
-                    'employee_dtr.actual_time_out',
-                    'employee_dtr.late_minutes',      
-                    'employee_dtr.undertime_minutes',  
-                    'employee_dtr.total_work_minutes'  
-                    // Add other relevant processed fields
-                );
-
-            if ($request->minDate) {
-                $query->whereDate('employee_dtr.date', '>=', $request->minDate);
-            }
-            if ($request->maxDate) {
-                $query->whereDate('employee_dtr.date', '<=', $request->maxDate);
-            }
-
-            $data = $query->get();
-
-            return response()->json(['data' => $data]);
-
-        } catch (\Exception $e) {
-            Log::error("Error fetching processed DTR data: " . $e->getMessage() . " on line " . $e->getLine() . " in file " . $e->getFile());
-            return response()->json([
-                'error' => true,
-                'message' => 'An error occurred while fetching processed DTR data. Please check logs.',
-            ], 500);
-        }
+        //
     }
 }
-
