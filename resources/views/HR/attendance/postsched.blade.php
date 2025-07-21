@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             })
             .catch(error => {
-                console.error("Schedule Fetch Error:", error);
+                    console.error("Schedule Fetch Error:", error);
             });
     }
 

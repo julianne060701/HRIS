@@ -1,4 +1,5 @@
 <?php
+use Illuminate\Support\Facades\Auth; // Ensure Auth is imported if you use 'can' with checks
 
 return [
 
