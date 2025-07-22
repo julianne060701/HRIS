@@ -24,6 +24,7 @@ class DTR extends Model
         'late_minutes',
         'is_undertime',         
         'undertime_minutes', 
+        'wrkhrs',
         'total_hours',
         'night_diff',
         'night_diff_reg',
