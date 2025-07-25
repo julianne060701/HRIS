@@ -35,11 +35,11 @@ class crtschedController extends Controller
         $request->validate([
     'shift_code'      => 'required|string|max:50',
     'shiftdesc'      => 'nullable|string|max:100',
-    'shifttime_in'   => 'required|date_format:H:i',
-    'shifttime_out'  => 'required|date_format:H:i',
+    'shifttime_in'   => 'nullable|date_format:H:i',
+    'shifttime_out'  => 'nullable|date_format:H:i',
     'break_in'       => 'nullable|date_format:H:i',
     'break_out'      => 'nullable|date_format:H:i',
-    'totalhours'     => 'required|integer|max:20',
+    'totalhours'     => 'nullable|integer|max:20',
     'status'         => 'required|string|max:20',
 ]);
 

@@ -17,6 +17,8 @@
     use App\Http\Controllers\leave\LeaveFilingController;
     use App\Http\Controllers\Leave\LeaveManagementController;
     use App\Http\Controllers\Leave\LeaveCreditController;
+    use App\Http\Controllers\Payroll\ProcessPayrollController;
+
 
 
 
@@ -166,8 +168,18 @@
     Route::get('/leave_credit', [LeaveCreditController::class, 'index'])->name('index');
     Route::post('/store', [LeaveCreditController::class, 'store'])->name('store');
     });
-    Route::get('/api/employees/search', [EmployeeSearchController::class, 'search'])->name('api.employees.search');
-    Route::get('/api/leave_types/search', [LeaveTypeSearchController::class, 'search'])->name('api.leave_types.search');
+    // Route::get('/api/employees/search', [EmployeeSearchController::class, 'search'])->name('api.employees.search');
+    // Route::get('/api/leave_types/search', [LeaveTypeSearchController::class, 'search'])->name('api.leave_types.search');
+
+    // Payroll Processing Routes
+    Route::get('payroll/process', [ProcessPayrollController::class, 'index'])->name('HR.payroll.process');
+    Route::get('payroll/process/{id}', [ProcessPayrollController::class, 'show'])->name('HR.payroll.show'); // Assuming you'll use the 'show' method for processing a specific ID
+    Route::post('payroll/save/{payroll}', [ProcessPayrollController::class, 'savePayroll'])->name('HR.payroll.save');
+    
+    
+    // The API routes you provided are separate and for AJAX calls
+    Route::get('/payroll-date-ranges', [ProcessPayrollController::class, 'fetchPayrollDateRanges']);
+    Route::get('/payroll-date-ranges/{id}', [ProcessPayrollController::class, 'fetchSpecificPayrollDateRange']);
 
 
 

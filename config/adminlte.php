@@ -388,9 +388,14 @@ return [
                     'url'  => 'HR/payroll/add_payroll',
                 ],
                 [
+                    'text' => 'Process Payroll',
+                    'url'  => 'payroll/process',
+                ],
+                [
                     'text' => 'Generate Payslip',
                     'url'  => 'HR/payroll/generate',
                 ],
+
                 [
                     'text' => 'Deductions',
                     'url'  => 'payroll/deductions',

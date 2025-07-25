@@ -90,12 +90,12 @@
 
                         <div class="form-group">
                             <label>Time IN</label>
-                            <input type="time" name="shifttime_in" class="form-control" required>
+                            <input type="time" name="shifttime_in" class="form-control">
                         </div>
 
                         <div class="form-group">
                             <label>Time OUT</label>
-                            <input type="time" name="shifttime_out" class="form-control" required>
+                            <input type="time" name="shifttime_out" class="form-control">
                         </div>
 
                         <div class="form-group">
