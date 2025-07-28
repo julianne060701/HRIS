@@ -25,6 +25,7 @@ return new class extends Migration
         $table->integer('late_minutes');
         $table->integer('is_undertime');
         $table->integer('undertime_minutes');
+        $table->integer('wrkhrs')->nullabe();
         $table->decimal('total_hours', 8, 2)->nullable(); 
         $table->decimal('night_diff', 8, 2)->nullable();
         $table->decimal('night_diff_reg', 8, 2)->nullable();

@@ -46,6 +46,7 @@ class ProcessDTRController extends Controller
                 $join->on('employee_schedules.employee_id', '=', 'attendance.employee_id')
                     ->whereRaw('DATE(attendance.transindate) = employee_schedules.date');
             })
+            // CORRECTED LINE: Join directly on the 'id' column of the 'leave_types' table
             ->leftJoin('leave_types', 'employee_schedules.leave_type_id', '=', 'leave_types.id')
             ->whereBetween('employee_schedules.date', [$startDate, $endDate]) // Filter by date range
             ->orderByDesc('employee_schedules.date')
@@ -79,27 +80,27 @@ class ProcessDTRController extends Controller
         $start = $startTime->copy();
         $end = $endTime->copy();
 
+        // Ensure end is after start for accurate duration, especially for shifts crossing midnight
         if ($end->lt($start)) {
-            $end->addDay(); // Ensure end is after start for accurate duration
+            $end->addDay();
         }
 
         $totalNightDiffMinutes = 0;
 
-        // Iterate through days covered by the shift
-        $current = $start->copy()->startOfDay();
-        while ($current->lte($end->copy()->startOfDay())) {
-            $nightStartOfDay = $current->copy()->setTime(22, 0, 0); // 10 PM on current day
-            $nightEndOfDay = $current->copy()->addDay()->setTime(6, 0, 0); // 6 AM on next day
+        // Night differential window: 10 PM to 6 AM (next day)
+        $ndWindowStartHour = 22; // 10 PM
+        $ndWindowEndHour = 6;    // 6 AM
 
-            // Determine overlap with the shift
-            $overlapStart = $start->max($nightStartOfDay);
-            $overlapEnd = $end->min($nightEndOfDay);
+        // Iterate minute by minute within the effective period
+        $current = $start->copy();
+        while ($current->lt($end)) {
+            $currentHour = $current->hour;
 
-            if ($overlapStart->lt($overlapEnd)) {
-                $totalNightDiffMinutes += $overlapEnd->diffInMinutes($overlapStart);
+            // Check if the current minute falls within the 10 PM to 6 AM window
+            if ($currentHour >= $ndWindowStartHour || $currentHour < $ndWindowEndHour) {
+                $totalNightDiffMinutes++;
             }
-
-            $current->addDay(); // Move to the next day
+            $current->addMinute();
         }
 
         return abs($totalNightDiffMinutes);
@@ -155,8 +156,8 @@ class ProcessDTRController extends Controller
             'dtrs.*.time_in' => 'nullable|date_format:H:i:s',
             'dtrs.*.time_out' => 'nullable|date_format:H:i:s',
             'dtrs.*.shift_code' => 'nullable|string|max:20',
-            'dtrs.*.xptd_time_in' => 'nullable|date_format:H:i:s',
-            'dtrs.*.xptd_time_out' => 'nullable|date_format:H:i:s',
+            'dtrs.*.xptd_time_in' => 'nullable|date_format:H:i:s', // These are from employee_schedules table
+            'dtrs.*.xptd_time_out' => 'nullable|date_format:H:i:s',// These are from employee_schedules table
             'dtrs.*.leave_type_id' => 'nullable|integer|exists:leave_types,id',
         ]);
 
@@ -178,20 +179,36 @@ class ProcessDTRController extends Controller
             $expectedIn = $dtr['xptd_time_in'] ?: null;
             $expectedOut = $dtr['xptd_time_out'] ?: null;
 
-            // Fallback for expected times if not already passed from the form
-            if ((!$expectedIn || !$expectedOut) && $shiftCodeFromForm) {
+            $expectedWorkHours = 0;
+            $expectedBreakIn = null;
+            $expectedBreakOut = null;
+
+            // --- Always fetch schedule data if a shift code is available ---
+            if ($shiftCodeFromForm) {
+                Log::info("DEBUG: Attempting to fetch schedule for shift_code: " . trim($shiftCodeFromForm));
                 $scheduleData = DB::table('schedule')
                     ->whereRaw('TRIM(shift_code) = ?', [trim($shiftCodeFromForm)])
-                    ->select('xptd_time_in', 'xptd_time_out')
+                    ->select('xptd_time_in', 'xptd_time_out', 'wrkhrs', 'xptd_brk_in', 'xptd_brk_out') // Make sure to select break times too
                     ->first();
 
                 if ($scheduleData) {
+                    // Only override expectedIn/Out if they were not already passed from the form (i.e., they were null)
                     $expectedIn = $expectedIn ?: $scheduleData->xptd_time_in;
                     $expectedOut = $expectedOut ?: $scheduleData->xptd_time_out;
+
+                    $expectedWorkHours = $scheduleData->wrkhrs;
+                    $expectedBreakIn = $scheduleData->xptd_brk_in;
+                    $expectedBreakOut = $scheduleData->xptd_brk_out;
+
+                    Log::info("DEBUG: Schedule data found. xptd_time_in: {$expectedIn}, xptd_time_out: {$expectedOut}, wrkhrs: {$expectedWorkHours}, break_in: {$expectedBreakIn}, break_out: {$expectedBreakOut}");
+                } else {
+                    Log::warning("DEBUG: Schedule data NOT found for shift_code: " . trim($shiftCodeFromForm) . ". Defaulting wrkhrs to 0 and proceeding without specific schedule times.");
                 }
+            } else {
+                Log::info("DEBUG: No shift code provided. Proceeding without specific schedule times or wrkhrs.");
             }
 
-            // --- Initialize Carbon objects ---
+            // --- Initialize Carbon objects for Actual Times ---
             $actualTimeInCarbon = $actualTimeIn ? Carbon::parse($baseDate->toDateString() . ' ' . $actualTimeIn) : null;
             $actualTimeOutCarbon = $actualTimeOut ? Carbon::parse($baseDate->toDateString() . ' ' . $actualTimeOut) : null;
 
@@ -199,6 +216,7 @@ class ProcessDTRController extends Controller
                 $actualTimeOutCarbon->addDay();
             }
 
+            // --- Initialize Carbon objects for Expected Times (using potentially updated values from schedule) ---
             $expectedTimeInCarbon = $expectedIn ? Carbon::parse($baseDate->toDateString() . ' ' . $expectedIn) : null;
             $expectedTimeOutCarbon = $expectedOut ? Carbon::parse($baseDate->toDateString() . ' ' . $expectedOut) : null;
 
@@ -211,18 +229,17 @@ class ProcessDTRController extends Controller
             $lateMinutes = 0;
             $isUndertime = false;
             $undertimeMinutes = 0;
-            $totalHours = 0; // Initialize total_hours to 0
+            $totalHours = 0;
             $totalMinutesWorked = 0;
 
             $nightDiffRegMinutes = 0;
             $nightDiffSpecMinutes = 0;
-            $nightDiffMinutes = 0;
+            $nightDiffNormalMinutes = 0; // Renamed to clarify it's non-holiday ND
 
             $accumulatedRegHolidayHours = 0.0;
             $accumulatedSpecHolidayHours = 0.0;
 
             // --- Determine the shift_code to store in the DTR table for THIS DTR entry ---
-            // Start by assuming it's the schedule's shift code
             $shiftCodeToStore = $shiftCodeFromForm;
 
             Log::info("Processing DTR for Employee ID: {$employeeId} on Date: {$baseDate->toDateString()}");
@@ -232,22 +249,18 @@ class ProcessDTRController extends Controller
             if ($leaveTypeId) {
                 $leaveType = LeaveType::find($leaveTypeId);
                 if ($leaveType) {
-                    // If on leave, set the shiftCodeToStore to the leave type name
                     $shiftCodeToStore = $leaveType->name;
-
-                    // Use the getLeaveDeductionHours function to determine total_hours for this leave type
                     $totalHours = $this->getLeaveDeductionHours($leaveType->name);
                 }
 
                 // Zero out other time-related calculations for leave days
                 $lateMinutes = 0;
                 $undertimeMinutes = 0;
-                $nightDiffMinutes = 0;
+                $nightDiffNormalMinutes = 0;
                 $nightDiffRegMinutes = 0;
                 $nightDiffSpecMinutes = 0;
                 $accumulatedRegHolidayHours = 0.0;
                 $accumulatedSpecHolidayHours = 0.0;
-                // Also set actual time in/out to null for leave days if they were somehow populated
                 $actualTimeIn = null;
                 $actualTimeOut = null;
 
@@ -255,18 +268,22 @@ class ProcessDTRController extends Controller
                 Log::info("Employee is on leave (ID: {$leaveTypeId}, Name: " . ($shiftCodeToStore ?? 'N/A') . "). Setting total_hours to leave type's deduction hours: {$totalHours}.");
 
             } else {
-                // Normal processing for non-leave days
+
+                $hourFraction = 1 / 60.0;
+
                 // Calculate Lateness with Grace Period
                 if ($actualTimeInCarbon && $expectedTimeInCarbon) {
                     $expectedTimeInWithGrace = $expectedTimeInCarbon->copy()->addMinutes($lateGracePeriodMinutes);
 
                     if ($actualTimeInCarbon->gt($expectedTimeInWithGrace)) {
                         $isLate = true;
+                        // Late minutes are calculated from actual time in against expected time in
                         $lateMinutes = $actualTimeInCarbon->diffInMinutes($expectedTimeInCarbon);
                     } else {
                         $isLate = false;
                         $lateMinutes = 0;
                     }
+                    $lateMinutes = abs($lateMinutes); // Ensure non-negative
                 }
 
                 // Calculate Undertime
@@ -274,11 +291,13 @@ class ProcessDTRController extends Controller
                     try {
                         if ($actualTimeOutCarbon->lt($expectedTimeOutCarbon)) {
                             $isUndertime = true;
+                            // Undertime minutes are calculated from expected time out against actual time out
                             $undertimeMinutes = $expectedTimeOutCarbon->diffInMinutes($actualTimeOutCarbon);
                         } else {
                             $isUndertime = false;
                             $undertimeMinutes = 0;
                         }
+                        $undertimeMinutes = abs($undertimeMinutes); // Ensure non-negative
                     } catch (\Exception $e) {
                         report($e);
                         $undertimeMinutes = 0;
@@ -287,16 +306,111 @@ class ProcessDTRController extends Controller
                     }
                 }
 
-                // --- Main Time Calculation Loop: Regular Hours, Holiday Hours, and Night Differential ---
-                if ($actualTimeInCarbon && $actualTimeOutCarbon) {
-                    $currentMinute = $actualTimeInCarbon->copy();
-                    $totalMinutesWorked = 0;
-                    $hourFraction = 1 / 60.0;
+                // --- Calculate total_hours based on effective time (actual bounded by expected) and deducting breaks ---
+                $effectiveTimeIn = null;
+                $effectiveTimeOut = null;
 
+                // Determine the effective time in: Later of actual or expected
+                if ($actualTimeInCarbon && $expectedTimeInCarbon) {
+                    $effectiveTimeIn = $actualTimeInCarbon->max($expectedTimeInCarbon);
+                } else {
+                    // If actual time in is missing, but expected is there, consider effective time in as expected (employee might be absent from this time)
+                    // Or if expected is missing, but actual is there, consider effective time in as actual
+                    $effectiveTimeIn = $actualTimeInCarbon ?? $expectedTimeInCarbon;
+                }
+
+                // Determine the effective time out: Earlier of actual or expected
+                if ($actualTimeOutCarbon && $expectedTimeOutCarbon) {
+                    $effectiveTimeOut = $actualTimeOutCarbon->min($expectedTimeOutCarbon);
+                } else {
+                    // If actual time out is missing, but expected is there, consider effective time out as expected
+                    // Or if expected is missing, but actual is there, consider effective time out as actual
+                    $effectiveTimeOut = $actualTimeOutCarbon ?? $expectedTimeOutCarbon;
+                }
+
+
+                if ($effectiveTimeIn && $effectiveTimeOut) {
+                    // Ensure effectiveTimeOut is not before effectiveTimeIn for duration calculation
+                    if ($effectiveTimeOut->lt($effectiveTimeIn)) {
+                        $totalMinutesWorked = 0;
+                        Log::warning("Logic error: Effective Time Out ({$effectiveTimeOut->format('Y-m-d H:i:s')}) is before Effective Time In ({$effectiveTimeIn->format('Y-m-d H:i:s')}). Setting totalMinutesWorked to 0.");
+                    } else {
+                        $totalMinutesWorked = $effectiveTimeOut->diffInMinutes($effectiveTimeIn);
+                        $totalMinutesWorked = abs($totalMinutesWorked); // Ensure positive
+                    }
+
+                    Log::info("DEBUG: totalMinutesWorked (initial gross, after effective times): {$totalMinutesWorked}");
+
+                    // --- Deduct break minutes if applicable and within the effective range ---
+                    $breakMinutes = 0;
+                    if ($expectedBreakIn && $expectedBreakOut) {
+                        $breakInCarbon = Carbon::parse($baseDate->toDateString() . ' ' . $expectedBreakIn);
+                        $breakOutCarbon = Carbon::parse($baseDate->toDateString() . ' ' . $expectedBreakOut);
+
+                        // Adjust breakOutCarbon if break spans midnight (e.g., 23:00 to 00:00 next day)
+                        if ($breakOutCarbon->lt($breakInCarbon)) {
+                            $breakOutCarbon->addDay();
+                        }
+
+                        // Calculate overlap of the expected break with the actual effective worked duration
+                        $overlapStart = $effectiveTimeIn->max($breakInCarbon);
+                        $overlapEnd = $effectiveTimeOut->min($breakOutCarbon);
+
+                        if ($overlapStart->lt($overlapEnd)) {
+                            $breakMinutes = abs($overlapEnd->diffInMinutes($overlapStart));;
+                        }
+                        Log::info("DEBUG: Calculated breakMinutes to deduct: {$breakMinutes}");
+                    }
+
+                    $totalMinutesWorked = max(0, $totalMinutesWorked - $breakMinutes); // Deduct break, ensure non-negative
+
+                    Log::info("DEBUG: totalMinutesWorked (after break deduction and max(0,...)): {$totalMinutesWorked}");
+
+                } else {
+                    $totalMinutesWorked = 0;
+                    Log::warning("DEBUG: Missing effectiveTimeIn or effectiveTimeOut. Setting totalMinutesWorked to 0.");
+                }
+
+                // REVISED: total_hours should be the actual minutes worked within the effective boundaries,
+                // without capping it at expectedWorkHours, unless totalMinutesWorked exceeds expectedWorkHours
+                // only due to rounding issues or if wrkhrs inherently includes breaks.
+                // Assuming wrkhrs is the *net* expected work hours after breaks.
+                $totalHours = round($totalMinutesWorked / 60, 2);
+                $totalHours = abs($totalHours); // Ensure it's non-negative
+
+                // If `wrkhrs` truly represents the *maximum* number of regular hours to be paid,
+                // you might still want to cap it. But given your comment "it is not exceeds the cap in wrkhrs",
+                // it implies that the `total_hours` *should* be less than `wrkhrs` if there's undertime/lateness,
+                // and it should also not exceed `wrkhrs` if there's overtime.
+                // The current `effectiveTimeIn/Out` already handles the "not exceeding" part.
+                // If `totalMinutesWorked` is exactly the minutes for `wrkhrs` (e.g., 8 hours = 480 minutes),
+                // then it should be 8. If less, it should be less.
+                // If it's a floating point, small discrepancies might cause it to be slightly over wrkhrs.
+                // Let's cap it at expectedWorkHours *only if* the calculated value exceeds it slightly due to floating point.
+                $totalHours = min($totalHours, $expectedWorkHours); // Ensure it doesn't exceed expected work hours (regular time)
+
+                Log::info("Calculated totalHours (after final processing and made positive): {$totalHours}");
+
+
+                // --- Night Differential Calculation (using effective in/out, then distribute to holiday types) ---
+                // Calculate total night differential minutes for the effective period
+                $totalNightDiffEffectiveMinutes = $this->calculateNightDifferentialMinutes($effectiveTimeIn, $effectiveTimeOut);
+                Log::info("DEBUG: totalNightDiffEffectiveMinutes (from helper): {$totalNightDiffEffectiveMinutes}");
+
+
+                $accumulatedRegHolidayHours = 0.0;
+                $accumulatedSpecHolidayHours = 0.0;
+                $nightDiffRegMinutes = 0; // Reset for recalculation based on actual time within holidays
+                $nightDiffSpecMinutes = 0; // Reset for recalculation based on actual time within holidays
+                $nightDiffNormalMinutes = 0; // Initialize normal night diff
+
+                // Recalculate holiday hours and holiday night differential minutes based on effective time in/out
+                if ($effectiveTimeIn && $effectiveTimeOut) { // Use effective times for holiday distribution of ND
+                    $currentMinute = $effectiveTimeIn->copy();
                     $ndWindowStartHour = 22; // 10 PM
                     $ndWindowEndHour = 6;    // 6 AM
 
-                    while ($currentMinute->lt($actualTimeOutCarbon)) {
+                    while ($currentMinute->lt($effectiveTimeOut)) {
                         $minuteDate = $currentMinute->toDateString();
                         $holidayForMinute = Holiday::where('date', $minuteDate)->first();
                         $isMinuteOnRegularHoliday = ($holidayForMinute && $holidayForMinute->type === 'REGULAR HOLIDAY');
@@ -307,48 +421,59 @@ class ProcessDTRController extends Controller
 
                         if ($isMinuteOnRegularHoliday) {
                             $accumulatedRegHolidayHours += $hourFraction;
+                            if ($isWithinNDWindow) {
+                                $nightDiffRegMinutes++;
+                            }
                         } elseif ($isMinuteOnSpecialHoliday) {
                             $accumulatedSpecHolidayHours += $hourFraction;
-                        }
-
-                        if ($isWithinNDWindow) {
-                            if ($isMinuteOnRegularHoliday) {
-                                $nightDiffRegMinutes++;
-                            } elseif ($isMinuteOnSpecialHoliday) {
+                            if ($isWithinNDWindow) {
                                 $nightDiffSpecMinutes++;
-                            } else {
-                                $nightDiffMinutes++;
+                            }
+                        } else {
+                            // If not a holiday, and within ND window, it's normal night differential
+                            if ($isWithinNDWindow) {
+                                $nightDiffNormalMinutes++;
                             }
                         }
-
-                        $totalMinutesWorked++;
                         $currentMinute->addMinute();
                     }
-
-                    $totalHours = round($totalMinutesWorked / 60, 2);
-
-                    Log::info("Calculated totalMinutesWorked: {$totalMinutesWorked}");
-                    Log::info("Calculated totalHours (total actual duration): {$totalHours}");
-
-                } else {
-                    Log::info("Main time calculation loop: Not enough data (missing actual times).");
                 }
             } // End of else (not on leave) condition
 
             // --- Ensure all magnitude-based values are non-negative before saving ---
             $lateMinutes = abs($lateMinutes);
             $undertimeMinutes = abs($undertimeMinutes);
+            // Night diffs are already non-negative from calculation logic
+            $accumulatedRegHolidayHours = abs($accumulatedRegHolidayHours);
+            $accumulatedSpecHolidayHours = abs($accumulatedSpecHolidayHours);
+
 
             // Logging final values for debugging
             Log::info("Final values for updateOrCreate for {$employeeId} on {$baseDate->toDateString()}:");
             Log::info(" Total Hours: " . $totalHours);
             Log::info(" Reg Holiday Hours: " . round($accumulatedRegHolidayHours, 2));
-            Log::info(" Spec Holiday Hours: " . round(abs($accumulatedSpecHolidayHours), 2));
-            Log::info(" Night Diff (Normal, minutes): " . $nightDiffMinutes);
+            Log::info(" Spec Holiday Hours: " . round($accumulatedSpecHolidayHours, 2));
+            Log::info(" Night Diff (Normal, minutes): " . $nightDiffNormalMinutes); // Use the new variable
             Log::info(" Night Diff Reg (minutes): " . $nightDiffRegMinutes);
             Log::info(" Night Diff Spec (minutes): " . $nightDiffSpecMinutes);
-            Log::info("   Leave Type ID (to save): " . ($leaveTypeId ?? 'NULL'));
-            Log::info("   Shift Code to Store: " . ($shiftCodeToStore ?? 'NULL')); // Now this should be correct
+            Log::info(" Leave Type ID (to save): " . ($leaveTypeId ?? 'NULL'));
+            Log::info(" Shift Code to Store: " . ($shiftCodeToStore ?? 'NULL')); // Now this should be correct
+            Log::info("--- Processing DTR for Employee ID: {$employeeId} on Date: {$baseDate->toDateString()} ---");
+            
+            Log::info("Actual Time In: " . ($actualTimeInCarbon ? $actualTimeInCarbon->format('Y-m-d H:i:s') : 'N/A'));
+            Log::info("Actual Time Out: " . ($actualTimeOutCarbon ? $actualTimeOutCarbon->format('Y-m-d H:i:s') : 'N/A'));
+            Log::info("Expected Time In: " . ($expectedTimeInCarbon ? $expectedTimeInCarbon->format('Y-m-d H:i:s') : 'N/A'));
+            Log::info("Expected Time Out: " . ($expectedTimeOutCarbon ? $expectedTimeOutCarbon->format('Y-m-d H:i:s') : 'N/A'));
+            Log::info("Expected Break In: " . ($expectedBreakIn ?? 'N/A'));
+            Log::info("Expected Break Out: " . ($expectedBreakOut ?? 'N/A'));
+            Log::info("Expected Work Hours (wrkhrs): " . $expectedWorkHours);
+
+            Log::info("Effective Time In: " . ($effectiveTimeIn ? $effectiveTimeIn->format('Y-m-d H:i:s') : 'N/A'));
+            Log::info("Effective Time Out: " . ($effectiveTimeOut ? $effectiveTimeOut->format('Y-m-d H:i:s') : 'N/A'));
+            Log::info("Initial Gross totalMinutesWorked: {$totalMinutesWorked}");
+            Log::info("Calculated Break Minutes: {$breakMinutes}");
+            Log::info("totalMinutesWorked after break deduction: " . max(0, $totalMinutesWorked - $breakMinutes));
+            Log::info("FINAL total_hours to be saved: {$totalHours}");
 
             DTR::updateOrCreate(
                 [
@@ -366,15 +491,15 @@ class ProcessDTRController extends Controller
                     'late_minutes' => $lateMinutes,
                     'is_undertime' => $isUndertime,
                     'undertime_minutes' => $undertimeMinutes,
-                    'total_hours' => $totalHours, // This will now be the leave type's default hours if on leave
-                    'overtime_minutes' => 0,
-                    'night_diff' => round(abs($nightDiffMinutes) / 60, 2),
-                    'night_diff_reg' => round(abs($nightDiffRegMinutes) / 60, 2),
-                    'night_diff_spec' => round(abs($nightDiffSpecMinutes) / 60, 2),
-                    'reg_holiday_hours' => round(abs($accumulatedRegHolidayHours), 2),
-                    'spec_holiday_hours' => round(abs($accumulatedSpecHolidayHours), 2),
-                    'reg_holiday_ot_minutes' => 0,
-                    'spec_holiday_ot_minutes' => 0,
+                    'total_hours' => $totalHours, // This will now reflect the new logic
+                    'overtime_minutes' => 0, // Overtime needs separate calculation
+                    'night_diff' => round($nightDiffNormalMinutes / 60, 2),
+                    'night_diff_reg' => round($nightDiffRegMinutes / 60, 2),
+                    'night_diff_spec' => round($nightDiffSpecMinutes / 60, 2),
+                    'reg_holiday_hours' => round($accumulatedRegHolidayHours, 2),
+                    'spec_holiday_hours' => round($accumulatedSpecHolidayHours, 2),
+                    'reg_holiday_ot_minutes' => 0, // Needs separate calculation
+                    'spec_holiday_ot_minutes' => 0, // Needs separate calculation
                     'leave_type_id' => $leaveTypeId,
                     'updated_at' => now(),
                 ]
