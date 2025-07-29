@@ -44,6 +44,7 @@
 
         // Permission
         Route::get('/Permission/index', [PermissionController::class, 'index'])->name('Permission.index');
+        Route::post('/Permission/store', [PermissionController::class, 'store'])->name('Permission.store');
 
         /**
          * =====================

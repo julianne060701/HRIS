@@ -31,19 +31,11 @@
                     $config = [
                         'order' => [[2, 'desc']], // Order by date descending
                         'columns' => array_fill(0, count($heads), ['orderable' => true]),
-<<<<<<< HEAD
-                        'paging' => true,      // Disable pagination
-                        'info' => false,        // Disable info text (showing 1 to X of Y entries)
-                        'searching' => true,    // Keep search enabled if desired
-                        'pageLength' => 10,     // Show all entries. -1 means no limit.
-                        'responsive' => true,   // Make table responsive
-=======
                         'paging' => false,       // Disable pagination
                         'info' => false,         // Disable info text (showing 1 to X of Y entries)
                         'searching' => true,     // Keep search enabled if desired
                         'pageLength' => -1,      // Show all entries. -1 means no limit.
                         'responsive' => true,    // Make table responsive
->>>>>>> aac47f84155b909e22432a2c15a3382c43cd8853
                     ];
                 @endphp
 

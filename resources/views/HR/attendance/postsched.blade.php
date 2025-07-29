@@ -198,12 +198,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             })
             .catch(error => {
-<<<<<<< HEAD
-                    console.error("Schedule Fetch Error:", error);
-=======
                 console.error("Schedule Fetch Error:", error);
                 alert('An error occurred while fetching the schedule. Please try again.');
->>>>>>> aac47f84155b909e22432a2c15a3382c43cd8853
             });
     }
 
