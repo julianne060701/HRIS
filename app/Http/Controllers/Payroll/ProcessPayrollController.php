@@ -141,6 +141,45 @@ class ProcessPayrollController extends Controller
         return 0.00;
     }
 
+
+      protected function ComputePagibigEmployeeShare(float $monthlySalary): float
+    {
+        $employeeRate = 0;
+        $maxsalary = 10000;
+        $maxcontrib = 200; 
+
+        if ($monthlySalary <= 1500) {
+            $employeeRate = 0.01; 
+        } else {
+            $employeeRate = 0.02;
+        }
+
+      
+        $employeeContribution = min($monthlySalary, $maxsalary) * $employeeRate;
+        $employeeContribution = min($employeeContribution, $maxcontrib);
+
+        return $employeeContribution;
+    }
+
+    protected function ComputePagibigEmployerShare(float $monthlySalary): float
+    {
+        $employerRate = 0;
+        $maxsalaryER = 10000;
+        $maxcontER = 200;
+
+        if ($monthlySalary <= 1500) {
+            $employerRate = 0.02; // 2%
+        } else {
+            $employerRate = 0.02; // 2%
+        }
+
+       
+        $employerContribution = min($monthlySalary, $maxsalaryER) * $employerRate;
+        $employerContribution = min($employerContribution, $maxcontER);
+
+        return $employerContribution;
+    }
+
     /**
      * Computes payroll for a given payroll period.
      * The keys in the returned array are aligned with PayrollData model's fillable fields.
@@ -211,11 +250,12 @@ class ProcessPayrollController extends Controller
 
             //SSS deduction
               $sssContribution = $this->computeSSSContribution($employee->salary);
+              $pagibigContribution =$this->ComputePagibigEmployeeShare($employee->salary);
             
             // Initialize statutory contributions and tax to 0 for now
             // $sssContribution = 0.00;
             $philhealthContribution = 0.00;
-            $pagibigContribution = 0.00;
+            // $pagibigContribution = 0.00;
             $taxWithheld = 0.00;
             $otherDeductions = 0.00; // Placeholder for other custom deductions
 
@@ -289,64 +329,69 @@ class ProcessPayrollController extends Controller
      * @param \App\Models\Payroll $payroll
      * @return \Illuminate\Http\JsonResponse
      */
-    public function savePayroll(Request $request, Payroll $payroll)
-    {
-        $request->validate([
-            'payroll_results' => 'required|array',
-            'payroll_results.*.employee_id' => 'required|string',
-            'payroll_results.*.gross_pay' => 'required|numeric',
-            'payroll_results.*.net_pay' => 'required|numeric',
-            // Add more validation rules for other fields if necessary
-        ]);
+   public function savePayroll(Request $request, Payroll $payroll)
+{
+    $request->validate([
+        'payroll_results' => 'required|array',
+        'payroll_results.*.employee_id' => 'required|string',
+        'payroll_results.*.gross_pay' => 'required|numeric',
+        'payroll_results.*.net_pay' => 'required|numeric',
+        // Add more validation rules for other fields if necessary
+    ]);
 
-        try {
-            // Prevent duplicate saving for the same payroll period
-            $existingRecords = PayrollData::where('payroll_id', $payroll->id)->count();
-            if ($existingRecords > 0) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payroll for this period has already been saved.'
-                ], 409); // 409 Conflict
-            }
-
-            foreach ($request->input('payroll_results') as $result) {
-                PayrollData::create([
-                    'payroll_id' => $payroll->id,
-                    'employee_id' => $result['employee_id'],
-                    'payroll_start_date' => $result['payroll_start_date'],
-                    'payroll_end_date' => $result['payroll_end_date'],
-                    'gross_pay' => $result['gross_pay'],
-                    'basic_hours_pay' => $result['basic_hours_pay'],
-                    'night_differential_pay' => $result['night_differential_pay'],
-                    'regular_holiday_pay' => $result['regular_holiday_pay'],
-                    'special_holiday_pay' => $result['special_holiday_pay'],
-                    'overtime_pay' => $result['overtime_pay'],
-                    'late_deduction' => $result['late_deduction'],
-                    'undertime_deduction' => $result['undertime_deduction'],
-                    'sss_contribution' => $result['sss_contribution'],
-                    'philhealth_contribution' => $result['philhealth_contribution'],
-                    'pagibig_contribution' => $result['pagibig_contribution'],
-                    'tax_withheld' => $result['tax_withheld'],
-                    'other_deductions' => $result['other_deductions'],
-                    'total_deductions' => $result['total_deductions'],
-                    'net_pay' => $result['net_pay'],
-                    'processed_by' => Auth::id(), // Get the ID of the authenticated user
-                ]);
-            }
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Payroll successfully saved for ' . $payroll->title
-            ], 200);
-
-        } catch (\Exception $e) {
+    try {
+        // Prevent duplicate saving for the same payroll period
+        $existingRecords = PayrollData::where('payroll_id', $payroll->id)->count();
+        if ($existingRecords > 0) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to save payroll.',
-                'error' => $e->getMessage()
-            ], 500);
+                'message' => 'Payroll for this period has already been saved.'
+            ], 409); // 409 Conflict
         }
+
+        foreach ($request->input('payroll_results') as $result) {
+            PayrollData::create([
+                'payroll_id' => $payroll->id,
+                'employee_id' => $result['employee_id'],
+                'payroll_start_date' => $result['payroll_start_date'],
+                'payroll_end_date' => $result['payroll_end_date'],
+                'gross_pay' => $result['gross_pay'],
+                'basic_hours_pay' => $result['basic_hours_pay'],
+                'night_differential_pay' => $result['night_differential_pay'],
+                'regular_holiday_pay' => $result['regular_holiday_pay'],
+                'special_holiday_pay' => $result['special_holiday_pay'],
+                'overtime_pay' => $result['overtime_pay'],
+                'late_deduction' => $result['late_deduction'],
+                'undertime_deduction' => $result['undertime_deduction'],
+                'sss_contribution' => $result['sss_contribution'],
+                'philhealth_contribution' => $result['philhealth_contribution'],
+                'pagibig_contribution' => $result['pagibig_contribution'],
+                'tax_withheld' => $result['tax_withheld'],
+                'other_deductions' => $result['other_deductions'],
+                'total_deductions' => $result['total_deductions'],
+                'net_pay' => $result['net_pay'],
+                'processed_by' => Auth::id(),
+            ]);
+        }
+
+        // ✅ Update the payroll's status in the payrolls table
+        $payroll->status = 'Process';
+        $payroll->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payroll successfully saved for ' . $payroll->title
+        ], 200);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to save payroll.',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
+
 
     /**
      * Show the form for creating a new resource.
