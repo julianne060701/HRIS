@@ -9,6 +9,7 @@ use App\Models\Employee;
 use App\Models\DTR;
 use App\Models\Overtime;
 use App\Models\PayrollData; // Use the new PayrollData model
+use App\Models\Sss_contributions;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth; // For getting the authenticated user's ID
 
@@ -122,6 +123,24 @@ class ProcessPayrollController extends Controller
         return view('HR.payroll.new_result', compact('payrollPeriod', 'payrollResults'));
     }
 
+    protected function computeSSSContribution(float $monthlySalary): float
+    {
+        //   dd("Monthly Salary for SSS computation:", $monthlySalary);
+        // Find the SSS contribution record that matches the salary range
+        $sssContributionRecord = Sss_contributions::where('salary_range_from', '<=', $monthlySalary)
+                                                ->where('salary_range_to', '>=', $monthlySalary)
+                                                ->first();
+
+    // dd("SSS Contribution Record Found:", $sssContributionRecord);
+        if ($sssContributionRecord) {
+            $totalEmployeeContribution = $sssContributionRecord->reg_ee_share + $sssContributionRecord->wisp_ee_share;
+            return $totalEmployeeContribution;
+        }
+
+        // If no matching record is found, return 0 or handle as an error
+        return 0.00;
+    }
+
     /**
      * Computes payroll for a given payroll period.
      * The keys in the returned array are aligned with PayrollData model's fillable fields.
@@ -189,9 +208,12 @@ class ProcessPayrollController extends Controller
             // Deductions for Lates and Undertimes
             $lateDeduction = ($totalLateMinutes / 60) * $hourlyRate;
             $undertimeDeduction = ($totalUndertimeMinutes / 60) * $hourlyRate;
+
+            //SSS deduction
+              $sssContribution = $this->computeSSSContribution($employee->salary);
             
             // Initialize statutory contributions and tax to 0 for now
-            $sssContribution = 0.00;
+            // $sssContribution = 0.00;
             $philhealthContribution = 0.00;
             $pagibigContribution = 0.00;
             $taxWithheld = 0.00;
