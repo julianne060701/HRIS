@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-
+use App\Models\Payroll;
 use App\Models\DTR;
 use App\Models\Employee;
 use App\Models\Holiday;
@@ -21,8 +21,22 @@ class ProcessDTRController extends Controller
      */
     public function index(Request $request)
     {
-        $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->toDateString());
-        $endDate = $request->input('end_date', Carbon::now()->endOfMonth()->toDateString());
+        // 1. Fetch the latest payroll data to get the current cutoff dates.
+        $latestPayroll = Payroll::orderBy('created_at', 'desc')->first();
+
+        // 2. Set the start and end dates. Use the payroll dates if they exist,
+        // otherwise, default to the current month.
+        if ($latestPayroll) {
+            $startDate = $latestPayroll->from_date;
+            $endDate = $latestPayroll->to_date;
+        } else {
+            // Default to the current month if no payroll data is found.
+            $startDate = Carbon::now()->startOfMonth()->toDateString();
+            $endDate = Carbon::now()->endOfMonth()->toDateString();
+        }
+
+        // 3. Log the dates being used for debugging.
+        Log::info("Displaying DTR data for the payroll cutoff: From {$startDate} to {$endDate}");
 
         $data = DB::table('employee_schedules')
             ->select(
@@ -39,16 +53,17 @@ class ProcessDTRController extends Controller
             )
             ->leftJoin('employees', 'employee_schedules.employee_id', '=', 'employees.employee_id')
             ->leftJoin('schedule', function ($join) {
-                // Ensure the join condition is robust against leading/trailing spaces
                 $join->on(DB::raw('TRIM(employee_schedules.shift_code)'), '=', DB::raw('TRIM(schedule.shift_code)'));
             })
             ->leftJoin('attendance', function ($join) {
                 $join->on('employee_schedules.employee_id', '=', 'attendance.employee_id')
                     ->whereRaw('DATE(attendance.transindate) = employee_schedules.date');
             })
-            // CORRECTED LINE: Join directly on the 'id' column of the 'leave_types' table
             ->leftJoin('leave_types', 'employee_schedules.leave_type_id', '=', 'leave_types.id')
-            ->whereBetween('employee_schedules.date', [$startDate, $endDate]) // Filter by date range
+            
+            // 4. Use the new $startDate and $endDate variables for the date range filter.
+            ->whereBetween('employee_schedules.date', [$startDate, $endDate])
+            
             ->orderByDesc('employee_schedules.date')
             ->get();
 
@@ -309,6 +324,7 @@ class ProcessDTRController extends Controller
                 // --- Calculate total_hours based on effective time (actual bounded by expected) and deducting breaks ---
                 $effectiveTimeIn = null;
                 $effectiveTimeOut = null;
+                $breakMinutes = 0;
 
                 // Determine the effective time in: Later of actual or expected
                 if ($actualTimeInCarbon && $expectedTimeInCarbon) {
@@ -342,7 +358,8 @@ class ProcessDTRController extends Controller
                     Log::info("DEBUG: totalMinutesWorked (initial gross, after effective times): {$totalMinutesWorked}");
 
                     // --- Deduct break minutes if applicable and within the effective range ---
-                    $breakMinutes = 0;
+                   
+
                     if ($expectedBreakIn && $expectedBreakOut) {
                         $breakInCarbon = Carbon::parse($baseDate->toDateString() . ' ' . $expectedBreakIn);
                         $breakOutCarbon = Carbon::parse($baseDate->toDateString() . ' ' . $expectedBreakOut);
