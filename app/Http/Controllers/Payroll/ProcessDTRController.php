@@ -287,6 +287,15 @@ class ProcessDTRController extends Controller
                 $hourFraction = 1 / 60.0;
 
                 // Calculate Lateness with Grace Period
+
+
+                if (trim(strtoupper($shiftCodeFromForm)) === 'RDR') {
+                    $isLate = false;
+                    $lateMinutes = 0;
+                    $isUndertime = false;
+                    $undertimeMinutes = 0;
+                    Log::info("Exempting Employee ID {$employeeId} from late/undertime due to RDR shift code.");
+                    } else {
                 if ($actualTimeInCarbon && $expectedTimeInCarbon) {
                     $expectedTimeInWithGrace = $expectedTimeInCarbon->copy()->addMinutes($lateGracePeriodMinutes);
 
@@ -320,7 +329,7 @@ class ProcessDTRController extends Controller
                         Log::error("Error during undertime calculation: " . $e->getMessage());
                     }
                 }
-
+                    }
                 // --- Calculate total_hours based on effective time (actual bounded by expected) and deducting breaks ---
                 $effectiveTimeIn = null;
                 $effectiveTimeOut = null;
@@ -387,30 +396,12 @@ class ProcessDTRController extends Controller
                     $totalMinutesWorked = 0;
                     Log::warning("DEBUG: Missing effectiveTimeIn or effectiveTimeOut. Setting totalMinutesWorked to 0.");
                 }
-
-                // REVISED: total_hours should be the actual minutes worked within the effective boundaries,
-                // without capping it at expectedWorkHours, unless totalMinutesWorked exceeds expectedWorkHours
-                // only due to rounding issues or if wrkhrs inherently includes breaks.
-                // Assuming wrkhrs is the *net* expected work hours after breaks.
                 $totalHours = round($totalMinutesWorked / 60, 2);
-                $totalHours = abs($totalHours); // Ensure it's non-negative
-
-                // If `wrkhrs` truly represents the *maximum* number of regular hours to be paid,
-                // you might still want to cap it. But given your comment "it is not exceeds the cap in wrkhrs",
-                // it implies that the `total_hours` *should* be less than `wrkhrs` if there's undertime/lateness,
-                // and it should also not exceed `wrkhrs` if there's overtime.
-                // The current `effectiveTimeIn/Out` already handles the "not exceeding" part.
-                // If `totalMinutesWorked` is exactly the minutes for `wrkhrs` (e.g., 8 hours = 480 minutes),
-                // then it should be 8. If less, it should be less.
-                // If it's a floating point, small discrepancies might cause it to be slightly over wrkhrs.
-                // Let's cap it at expectedWorkHours *only if* the calculated value exceeds it slightly due to floating point.
-                $totalHours = min($totalHours, $expectedWorkHours); // Ensure it doesn't exceed expected work hours (regular time)
+                $totalHours = abs($totalHours);
 
                 Log::info("Calculated totalHours (after final processing and made positive): {$totalHours}");
 
 
-                // --- Night Differential Calculation (using effective in/out, then distribute to holiday types) ---
-                // Calculate total night differential minutes for the effective period
                 $totalNightDiffEffectiveMinutes = $this->calculateNightDifferentialMinutes($effectiveTimeIn, $effectiveTimeOut);
                 Log::info("DEBUG: totalNightDiffEffectiveMinutes (from helper): {$totalNightDiffEffectiveMinutes}");
 

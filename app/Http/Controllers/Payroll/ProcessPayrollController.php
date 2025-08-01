@@ -8,10 +8,13 @@ use App\Models\Payroll;
 use App\Models\Employee;
 use App\Models\DTR;
 use App\Models\Overtime;
-use App\Models\PayrollData; // Use the new PayrollData model
+use App\Models\PayrollData;
 use App\Models\Sss_contributions;
+use App\Models\Employee_deduction;
+use App\Models\Loan; // Added for computeLoanDeduction
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Auth; // For getting the authenticated user's ID
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log; // Added for logging in computeLoanDeduction
 
 class ProcessPayrollController extends Controller
 {
@@ -125,13 +128,11 @@ class ProcessPayrollController extends Controller
 
     protected function computeSSSContribution(float $monthlySalary): float
     {
-        //   dd("Monthly Salary for SSS computation:", $monthlySalary);
         // Find the SSS contribution record that matches the salary range
         $sssContributionRecord = Sss_contributions::where('salary_range_from', '<=', $monthlySalary)
-                                                ->where('salary_range_to', '>=', $monthlySalary)
-                                                ->first();
+                                                    ->where('salary_range_to', '>=', $monthlySalary)
+                                                    ->first();
 
-    // dd("SSS Contribution Record Found:", $sssContributionRecord);
         if ($sssContributionRecord) {
             $totalEmployeeContribution = $sssContributionRecord->reg_ee_share + $sssContributionRecord->wisp_ee_share;
             return $totalEmployeeContribution;
@@ -141,8 +142,23 @@ class ProcessPayrollController extends Controller
         return 0.00;
     }
 
+    // New method to compute SSS Employer Contribution
+    protected function computeSSSEmployerContribution(float $monthlySalary): float
+    {
+        $sssContributionRecord = Sss_contributions::where('salary_range_from', '<=', $monthlySalary)
+                                                    ->where('salary_range_to', '>=', $monthlySalary)
+                                                    ->first();
 
-      protected function ComputePagibigEmployeeShare(float $monthlySalary): float
+        if ($sssContributionRecord) {
+            $totalEmployerContribution = $sssContributionRecord->reg_er_share + $sssContributionRecord->wisp_er_share;
+            return $totalEmployerContribution;
+        }
+
+        return 0.00;
+    }
+
+
+    protected function ComputePagibigEmployeeShare(float $monthlySalary): float
     {
         $employeeRate = 0;
         $maxsalary = 10000;
@@ -154,7 +170,7 @@ class ProcessPayrollController extends Controller
             $employeeRate = 0.02;
         }
 
-      
+        
         $employeeContribution = min($monthlySalary, $maxsalary) * $employeeRate;
         $employeeContribution = min($employeeContribution, $maxcontrib);
 
@@ -173,12 +189,124 @@ class ProcessPayrollController extends Controller
             $employerRate = 0.02; // 2%
         }
 
-       
+        
         $employerContribution = min($monthlySalary, $maxsalaryER) * $employerRate;
         $employerContribution = min($employerContribution, $maxcontER);
 
         return $employerContribution;
     }
+
+    protected function ComputePhicEe(float $monthlySalary): float
+    {
+        $employeeRate = 0.025;
+        $minsalaryEe = 10000;
+        $maxsalaryEe = 100000;
+
+        $psalary = $monthlySalary;
+
+        if ($psalary <= $minsalaryEe) {
+            $psalary = $minsalaryEe;
+        } elseif ($psalary >=$maxsalaryEe) {
+            $psalary = $maxsalaryEe;
+        }
+
+        $employeeContribution = $psalary * $employeeRate;
+
+        return $employeeContribution;
+    }
+
+    protected function ComputePhicEr(float $monthlySalary): float
+    {
+        $employeeRate = 0.025;
+        $minsalaryEe = 10000;
+        $maxsalaryEe = 100000;
+
+        $psalary = $monthlySalary;
+
+        if ($psalary <= $minsalaryEe) {
+            $psalary = $minsalaryEe;
+        } elseif ($psalary >=$maxsalaryEe) {
+            $psalary = $maxsalaryEe;
+        }
+
+        $employeeContribution = $psalary * $employeeRate;
+
+        return $employeeContribution;
+    }
+
+    protected function computeWithholdingTax(float $monthlyTaxableIncome): float
+    {
+        // The taxable income here is expected to be the MONTHLY taxable income
+        $tax = 0.00;
+
+        if ($monthlyTaxableIncome <= 10146.50) {
+            $tax = 0; // 0%
+        } elseif ($monthlyTaxableIncome <= 16662) {
+            $tax = 0 + (0.15 * ($monthlyTaxableIncome - 10146.50));
+        } elseif ($monthlyTaxableIncome <= 33333) {
+            $tax = 1875.00 + (0.20 * ($monthlyTaxableIncome - 16662));
+        } elseif ($monthlyTaxableIncome <= 83333) {
+            $tax = 8541.80 + (0.25 * ($monthlyTaxableIncome - 33333));
+        } elseif ($monthlyTaxableIncome <= 333333) {
+            $tax = 33541.80 + (0.30 * ($monthlyTaxableIncome - 83333));
+        } else {
+            $tax = 183541.80 + (0.35 * ($monthlyTaxableIncome - 333333));
+        }
+
+        return max(0, round($tax, 2));
+    }
+
+
+    /**
+     * Computes and applies loan deductions for a given employee within a payroll period.
+     * Updates the loan balance and status in the database.
+     *
+     * @param string $employeeId The ID of the employee.
+     * @param Carbon $payrollFromDate The start date of the payroll period.
+     * @param Carbon $payrollToDate The end date of the payroll period.
+     * @return float The total loan deduction for the current payroll period.
+     */
+    protected function computeLoanDeduction(string $employeeId, Carbon $payrollFromDate, Carbon $payrollToDate): float
+    {
+        $totalLoanDeduction = 0.00;
+
+        // Fetch all active loans for the employee that are due within or before this payroll period
+        $activeLoans = Loan::where('employee_id', $employeeId)
+                            ->where('status', 'active')
+                            ->where('start_date', '<=', $payrollToDate) // Loan started on or before payroll end date
+                            ->get();
+
+        Log::info("Employee {$employeeId}: Checking for active loans for period {$payrollFromDate->format('Y-m-d')} to {$payrollToDate->format('Y-m-d')}. Found " . $activeLoans->count() . " active loans.");
+
+        foreach ($activeLoans as $loan) {
+            // Determine the amount to deduct for this specific loan in this period
+            // It should be the amortization amount, but not more than the remaining balance.
+            $deductionAmount = min($loan->amortization_amount, $loan->balance);
+
+            if ($deductionAmount > 0) {
+                $totalLoanDeduction += $deductionAmount;
+
+                // Update the loan balance
+                $loan->balance -= $deductionAmount;
+
+                // If balance is zero or less, mark the loan as paid
+                if ($loan->balance <= 0.00) {
+                    $loan->balance = 0.00; // Ensure balance is exactly zero
+                    $loan->status = 'paid';
+                    Log::info("Employee {$employeeId}: Loan ID {$loan->id} fully paid. Balance: {$loan->balance}");
+                }
+
+                // Save the updated loan record
+                $loan->save();
+                Log::info("Employee {$employeeId}: Loan ID {$loan->id} deducted {$deductionAmount}. New balance: {$loan->balance}. Status: {$loan->status}");
+            } else {
+                Log::info("Employee {$employeeId}: Loan ID {$loan->id} has zero or negative deduction amount or balance. Skipping.");
+            }
+        }
+
+        return round($totalLoanDeduction, 2);
+    }
+
 
     /**
      * Computes payroll for a given payroll period.
@@ -191,6 +319,8 @@ class ProcessPayrollController extends Controller
     {
         $fromDate = $payrollPeriod->from_date;
         $toDate = $payrollPeriod->to_date;
+        
+        $isSecondCutoff = ($toDate->day >= 11 && $toDate->day <= 25);
 
         $employees = Employee::all(); // Fetch all employees
 
@@ -248,29 +378,32 @@ class ProcessPayrollController extends Controller
             $lateDeduction = ($totalLateMinutes / 60) * $hourlyRate;
             $undertimeDeduction = ($totalUndertimeMinutes / 60) * $hourlyRate;
 
-            //SSS deduction
-              $sssContribution = $this->computeSSSContribution($employee->salary);
-              $pagibigContribution =$this->ComputePagibigEmployeeShare($employee->salary);
+            // SSS, Pag-IBIG, PhilHealth, and Tax computations (Employee & Employer Shares)
+            $sssEmployeeContribution = $this->computeSSSContribution($employee->salary);
+            $sssEmployerContribution = $this->computeSSSEmployerContribution($employee->salary); // New: Employer SSS
+            $pagibigEmployeeContribution = $this->ComputePagibigEmployeeShare($employee->salary);
+            $pagibigEmployerContribution = $this->ComputePagibigEmployerShare($employee->salary);
+            $philhealthEmployeeContribution = $this->ComputePhicEe($employee->salary);
+            $philhealthEmployerContribution = $this->ComputePhicEr($employee->salary);
+            $taxWithheld = $this->computeWithholdingTax($employee->salary);
             
-            // Initialize statutory contributions and tax to 0 for now
-            // $sssContribution = 0.00;
-            $philhealthContribution = 0.00;
-            // $pagibigContribution = 0.00;
-            $taxWithheld = 0.00;
+            // Compute loan deductions
+            $loanDeduction = $this->computeLoanDeduction($employee->employee_id, $fromDate, $toDate);
+            
             $otherDeductions = 0.00; // Placeholder for other custom deductions
 
-            $totalDeductions = $lateDeduction + $undertimeDeduction + 
-                               $sssContribution + $philhealthContribution + 
-                               $pagibigContribution + $taxWithheld + $otherDeductions;
+            $totalEmployeeDeductions = $lateDeduction + $undertimeDeduction + 
+                                       $sssEmployeeContribution + $philhealthEmployeeContribution + 
+                                       $pagibigEmployeeContribution + $taxWithheld + $loanDeduction + $otherDeductions;
+
+            $totalEmployerContributions = $sssEmployerContribution + $pagibigEmployerContribution + $philhealthEmployerContribution;
+
 
             // Overtime Pay Calculation (Adjust rates according to your company policy)
             $regularOvertimePay = $totalApprovedOvertimeHours * ($hourlyRate * 1.25); 
             $regHolidayPay = $totalRegHolidayHours * ($hourlyRate * 2.00); 
             $specHolidayPay = $totalSpecHolidayHours * ($hourlyRate * 1.30); 
             $nightDifferentialPay = $totalNightDiffHours * ($hourlyRate * 0.10); 
-            // Note: Night diff on regular/special holidays might be included in reg/spec holiday pay,
-            // or calculated as a separate premium on top of the holiday rate.
-            // For simplicity, summing them up here based on provided DTR fields.
             $nightDifferentialPay += $totalNightDiffRegHours * ($hourlyRate * 2.10); // Example: Night diff on regular holiday
             $nightDifferentialPay += $totalNightDiffSpecHours * ($hourlyRate * 1.40); // Example: Night diff on special holiday
 
@@ -280,7 +413,7 @@ class ProcessPayrollController extends Controller
             $grossPay = $basicHoursPay + $overtimePay; // Add other income like allowances here if applicable
 
             // Net Pay
-            $netPay = $grossPay - $totalDeductions;
+            $netPay = $grossPay - $totalEmployeeDeductions;
 
             $payrollResults[] = [
                 'employee_id' => $employee->employee_id,
@@ -295,12 +428,17 @@ class ProcessPayrollController extends Controller
                 'overtime_pay' => round($overtimePay, 2),
                 'late_deduction' => round($lateDeduction, 2),
                 'undertime_deduction' => round($undertimeDeduction, 2),
-                'sss_contribution' => round($sssContribution, 2), // Placeholder
-                'philhealth_contribution' => round($philhealthContribution, 2), // Placeholder
-                'pagibig_contribution' => round($pagibigContribution, 2), // Placeholder
-                'tax_withheld' => round($taxWithheld, 2), // Placeholder
-                'other_deductions' => round($otherDeductions, 2), // Placeholder
-                'total_deductions' => round($totalDeductions, 2),
+                'sss_contribution' => round($sssEmployeeContribution, 2), // Employee SSS
+                'sss_employer_contribution' => round($sssEmployerContribution, 2), // New: Employer SSS
+                'philhealth_contribution' => round($philhealthEmployeeContribution, 2), // Employee PhilHealth
+                'philhealth_employer_contribution' => round($philhealthEmployerContribution, 2), // New: Employer PhilHealth
+                'pagibig_contribution' => round($pagibigEmployeeContribution, 2), // Employee Pag-IBIG
+                'pagibig_employer_contribution' => round($pagibigEmployerContribution, 2), // New: Employer Pag-IBIG
+                'tax_withheld' => round($taxWithheld, 2),
+                'loan_deduction' => round($loanDeduction, 2), // New: Loan Deduction
+                'other_deductions' => round($otherDeductions, 2),
+                'total_deductions' => round($totalEmployeeDeductions, 2), // Total Employee Deductions
+                'total_employer_contributions' => round($totalEmployerContributions, 2), // New: Total Employer Contributions
                 'net_pay' => round($netPay, 2),
 
                 // Include these for detailed view in blade, not directly saved to PayrollData
@@ -329,7 +467,7 @@ class ProcessPayrollController extends Controller
      * @param \App\Models\Payroll $payroll
      * @return \Illuminate\Http\JsonResponse
      */
-   public function savePayroll(Request $request, Payroll $payroll)
+public function savePayroll(Request $request, Payroll $payroll)
 {
     $request->validate([
         'payroll_results' => 'required|array',
@@ -341,8 +479,10 @@ class ProcessPayrollController extends Controller
 
     try {
         // Prevent duplicate saving for the same payroll period
-        $existingRecords = PayrollData::where('payroll_id', $payroll->id)->count();
-        if ($existingRecords > 0) {
+        $existingPayrollDataRecords = PayrollData::where('payroll_id', $payroll->id)->count();
+        $existingDeductionRecords = Employee_deduction::where('payroll_id', $payroll->id)->count();
+
+        if ($existingPayrollDataRecords > 0 || $existingDeductionRecords > 0) {
             return response()->json([
                 'success' => false,
                 'message' => 'Payroll for this period has already been saved.'
@@ -350,6 +490,7 @@ class ProcessPayrollController extends Controller
         }
 
         foreach ($request->input('payroll_results') as $result) {
+            // Save to PayrollData model
             PayrollData::create([
                 'payroll_id' => $payroll->id,
                 'employee_id' => $result['employee_id'],
@@ -363,19 +504,35 @@ class ProcessPayrollController extends Controller
                 'overtime_pay' => $result['overtime_pay'],
                 'late_deduction' => $result['late_deduction'],
                 'undertime_deduction' => $result['undertime_deduction'],
-                'sss_contribution' => $result['sss_contribution'],
-                'philhealth_contribution' => $result['philhealth_contribution'],
-                'pagibig_contribution' => $result['pagibig_contribution'],
+                'sss_contribution' => $result['sss_contribution'], 
+                'philhealth_contribution' => $result['philhealth_contribution'], 
+                'pagibig_contribution' => $result['pagibig_contribution'], 
                 'tax_withheld' => $result['tax_withheld'],
-                'other_deductions' => $result['other_deductions'],
+                'other_deductions' => $result['other_deductions'], 
                 'total_deductions' => $result['total_deductions'],
                 'net_pay' => $result['net_pay'],
                 'processed_by' => Auth::id(),
             ]);
+
+            // Save to Employee_deduction model
+            Employee_deduction::create([
+                'employee_id' => $result['employee_id'],
+                'payroll_id' => $payroll->id,
+                'monthly_salary' => $result['gross_pay'],
+                'sss_employee_contribution' => $result['sss_contribution'],
+                'sss_employer_contribution' => $result['sss_employer_contribution'],
+                'pagibig_employee_contribution' => $result['pagibig_contribution'],
+                'pagibig_employer_contribution' => $result['pagibig_employer_contribution'],
+                'philhealth_employee_contribution' => $result['philhealth_contribution'],
+                'philhealth_employer_contribution' => $result['philhealth_employer_contribution'],
+                'withholdingtax' => $result['tax_withheld'],
+                'total_employee_deduction' => $result['total_deductions'],
+                'total_employer_deduction' => $result['total_employer_contributions'], 
+            ]);
         }
 
-        // ✅ Update the payroll's status in the payrolls table
-        $payroll->status = 'Process';
+        // Update the payroll's status in the payrolls table
+        $payroll->status = 'Processed';
         $payroll->save();
 
         return response()->json([
@@ -392,7 +549,6 @@ class ProcessPayrollController extends Controller
     }
 }
 
-
     /**
      * Show the form for creating a new resource.
      */
@@ -406,7 +562,8 @@ class ProcessPayrollController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        // This 'store' method is currently unused and can be repurposed
+        // or removed if not needed for other functionalities.
     }
 
     /**
