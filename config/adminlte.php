@@ -417,6 +417,22 @@ return [
             ],
         ],
         [
+            'text' => 'Loan',
+            'icon' => 'fas fa-fw fa-money-check-alt',
+            'submenu' => [
+                [
+                    'text' => 'Add Loan',
+                    'url'  => '/HR/loan/addloan',
+                    'icon' => 'fas fa-fingerprint',
+                ],
+                [
+                    'text' => 'Process DTR',
+                    'url'  => 'HR/attendance/processdtr',
+                    'icon' => 'fas fa-cogs',
+                ],
+            ],
+        ],
+        [
             'text' => 'Attendance',
             'icon' => 'fas fa-fw fa-money-check-alt',
             'submenu' => [

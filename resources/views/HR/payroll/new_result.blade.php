@@ -464,6 +464,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         <li><span>PhilHealth:</span> <span class="amount-negative">₱${details.philhealth_contribution.toFixed(2)}</span></li>
                         <li><span>Pag-IBIG:</span> <span class="amount-negative">₱${details.pagibig_contribution.toFixed(2)}</span></li>
                         <li><span>Tax Withheld:</span> <span class="amount-negative">₱${details.tax_withheld.toFixed(2)}</span></li>
+                        <li><span>Loan:</span> <span class="amount-negative">₱${details.loan_deduction.toFixed(2)}</span></li>
                         <li><span>Other Deductions:</span> <span class="amount-negative">₱${details.other_deductions.toFixed(2)}</span></li>
                         <li style="border-top: 2px solid #e2e8f0; margin-top: 8px; padding-top: 8px;">
                             <span><strong>Total Deductions:</strong></span> 

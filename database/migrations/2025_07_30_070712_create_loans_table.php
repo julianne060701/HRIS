@@ -20,6 +20,7 @@ return new class extends Migration
             $table->decimal('amortization_amount', 10, 2);
             $table->date('start_date')->nullable(); 
             $table->date('end_date')->nullable(); 
+            $table->integer('numer_terms')->nullable();
             $table->string('status')->default('active');
             $table->timestamps();
 

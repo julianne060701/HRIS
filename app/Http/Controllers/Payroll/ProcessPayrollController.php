@@ -256,31 +256,89 @@ class ProcessPayrollController extends Controller
         return max(0, round($tax, 2));
     }
 
-
     /**
-     * Computes and applies loan deductions for a given employee within a payroll period.
-     * Updates the loan balance and status in the database.
+     * Calculates loan deductions WITHOUT updating the database.
+     * This is used for payroll preview/computation only.
      *
      * @param string $employeeId The ID of the employee.
      * @param Carbon $payrollFromDate The start date of the payroll period.
      * @param Carbon $payrollToDate The end date of the payroll period.
+     * @param int $payrollId The payroll period ID to check for existing deductions.
      * @return float The total loan deduction for the current payroll period.
      */
-    protected function computeLoanDeduction(string $employeeId, Carbon $payrollFromDate, Carbon $payrollToDate): float
+    protected function calculateLoanDeduction(string $employeeId, Carbon $payrollFromDate, Carbon $payrollToDate, int $payrollId): float
     {
         $totalLoanDeduction = 0.00;
+
+        // Check if loan deductions have already been processed for this payroll period
+        $existingDeductions = PayrollData::where('employee_id', $employeeId)
+                                        ->where('payroll_id', $payrollId)
+                                        ->whereNotNull('loan_deduction')
+                                        ->where('loan_deduction', '>', 0)
+                                        ->exists();
+
+        if ($existingDeductions) {
+            Log::info("Employee {$employeeId}: Loan deductions already processed for payroll ID {$payrollId}. Skipping calculation.");
+            return 0.00;
+        }
 
         // Fetch all active loans for the employee that are due within or before this payroll period
         $activeLoans = Loan::where('employee_id', $employeeId)
                             ->where('status', 'active')
-                            ->where('start_date', '<=', $payrollToDate) // Loan started on or before payroll end date
+                            ->where('start_date', '<=', $payrollToDate)
                             ->get();
 
         Log::info("Employee {$employeeId}: Checking for active loans for period {$payrollFromDate->format('Y-m-d')} to {$payrollToDate->format('Y-m-d')}. Found " . $activeLoans->count() . " active loans.");
 
         foreach ($activeLoans as $loan) {
+            // Calculate the amount to deduct (don't update the database yet)
+            $deductionAmount = min($loan->amortization_amount, $loan->balance);
+
+            if ($deductionAmount > 0) {
+                $totalLoanDeduction += $deductionAmount;
+                Log::info("Employee {$employeeId}: Loan ID {$loan->id} will have deduction of {$deductionAmount}. Current balance: {$loan->balance}");
+            }
+        }
+
+        return round($totalLoanDeduction, 2);
+    }
+
+    /**
+     * Actually processes and updates loan deductions in the database.
+     * This should only be called when saving the payroll.
+     *
+     * @param string $employeeId The ID of the employee.
+     * @param Carbon $payrollFromDate The start date of the payroll period.
+     * @param Carbon $payrollToDate The end date of the payroll period.
+     * @param int $payrollId The payroll period ID.
+     * @return float The total loan deduction processed.
+     */
+    protected function processLoanDeduction(string $employeeId, Carbon $payrollFromDate, Carbon $payrollToDate, int $payrollId): float
+    {
+        $totalLoanDeduction = 0.00;
+
+        // Double-check if loan deductions have already been processed for this payroll period
+        $existingDeductions = PayrollData::where('employee_id', $employeeId)
+                                        ->where('payroll_id', $payrollId)
+                                        ->whereNotNull('loan_deduction')
+                                        ->where('loan_deduction', '>', 0)
+                                        ->exists();
+
+        if ($existingDeductions) {
+            Log::info("Employee {$employeeId}: Loan deductions already processed for payroll ID {$payrollId}. Skipping processing.");
+            return 0.00;
+        }
+
+        // Fetch all active loans for the employee that are due within or before this payroll period
+        $activeLoans = Loan::where('employee_id', $employeeId)
+                            ->where('status', 'active')
+                            ->where('start_date', '<=', $payrollToDate)
+                            ->get();
+
+        Log::info("Employee {$employeeId}: Processing loan deductions for period {$payrollFromDate->format('Y-m-d')} to {$payrollToDate->format('Y-m-d')}. Found " . $activeLoans->count() . " active loans.");
+
+        foreach ($activeLoans as $loan) {
             // Determine the amount to deduct for this specific loan in this period
-            // It should be the amortization amount, but not more than the remaining balance.
             $deductionAmount = min($loan->amortization_amount, $loan->balance);
 
             if ($deductionAmount > 0) {
@@ -307,7 +365,6 @@ class ProcessPayrollController extends Controller
         return round($totalLoanDeduction, 2);
     }
 
-
     /**
      * Computes payroll for a given payroll period.
      * The keys in the returned array are aligned with PayrollData model's fillable fields.
@@ -327,8 +384,6 @@ class ProcessPayrollController extends Controller
         $payrollResults = [];
 
         foreach ($employees as $employee) {
-            // Assuming 22 working days in a month for daily rate calculation
-            // And 8 working hours per day for hourly rate calculation
             $dailyRate = $employee->salary / 22; 
             $hourlyRate = $dailyRate / 8; 
 
@@ -359,7 +414,7 @@ class ProcessPayrollController extends Controller
                 $totalNightDiffSpecHours += $dtr->night_diff_spec ?? 0;
             }
 
-            // Fetch approved overtime records for the employee within the payroll period
+          
             $overtimeRecords = Overtime::where('employee_id', $employee->employee_id)
                                        ->whereBetween('ot_date', [$fromDate, $toDate])
                                        ->where('is_approved', 1) // Assuming '1' means approved
@@ -387,16 +442,28 @@ class ProcessPayrollController extends Controller
             $philhealthEmployerContribution = $this->ComputePhicEr($employee->salary);
             $taxWithheld = $this->computeWithholdingTax($employee->salary);
             
-            // Compute loan deductions
-            $loanDeduction = $this->computeLoanDeduction($employee->employee_id, $fromDate, $toDate);
-            
+            // CHANGED: Use calculateLoanDeduction instead of computeLoanDeduction for preview
+            $loanDeduction = $this->calculateLoanDeduction($employee->employee_id, $fromDate, $toDate, $payrollPeriod->id);
             $otherDeductions = 0.00; // Placeholder for other custom deductions
+  
+            if ($isSecondCutoff) {
+                 $totalEmployeeDeductions = $lateDeduction + $undertimeDeduction + 
+                           $sssEmployeeContribution + $philhealthEmployeeContribution + 
+                           $pagibigEmployeeContribution + $taxWithheld + $otherDeductions;
+                 // Don't include loan deduction in second cutoff
+                 $loanDeduction = 0.00;
+            } else {
+                 $totalEmployeeDeductions = $lateDeduction + $undertimeDeduction + 
+                                            $loanDeduction + $otherDeductions;
+                        $sssEmployeeContribution = 0.00;
+                        $philhealthEmployeeContribution = 0.00;
+                        $pagibigEmployeeContribution = 0.00;
+                        $taxWithheld = 0.00;                
+            }
+                $totalEmployerContributions = $sssEmployerContribution + 
+                                              $pagibigEmployerContribution + 
+                                            $philhealthEmployerContribution;
 
-            $totalEmployeeDeductions = $lateDeduction + $undertimeDeduction + 
-                                       $sssEmployeeContribution + $philhealthEmployeeContribution + 
-                                       $pagibigEmployeeContribution + $taxWithheld + $loanDeduction + $otherDeductions;
-
-            $totalEmployerContributions = $sssEmployerContribution + $pagibigEmployerContribution + $philhealthEmployerContribution;
 
 
             // Overtime Pay Calculation (Adjust rates according to your company policy)
@@ -435,7 +502,7 @@ class ProcessPayrollController extends Controller
                 'pagibig_contribution' => round($pagibigEmployeeContribution, 2), // Employee Pag-IBIG
                 'pagibig_employer_contribution' => round($pagibigEmployerContribution, 2), // New: Employer Pag-IBIG
                 'tax_withheld' => round($taxWithheld, 2),
-                'loan_deduction' => round($loanDeduction, 2), // New: Loan Deduction
+                'loan_deduction' => round($loanDeduction, 2), // New: Loan Deduction (calculated, not processed)
                 'other_deductions' => round($otherDeductions, 2),
                 'total_deductions' => round($totalEmployeeDeductions, 2), // Total Employee Deductions
                 'total_employer_contributions' => round($totalEmployerContributions, 2), // New: Total Employer Contributions
@@ -467,87 +534,102 @@ class ProcessPayrollController extends Controller
      * @param \App\Models\Payroll $payroll
      * @return \Illuminate\Http\JsonResponse
      */
-public function savePayroll(Request $request, Payroll $payroll)
-{
-    $request->validate([
-        'payroll_results' => 'required|array',
-        'payroll_results.*.employee_id' => 'required|string',
-        'payroll_results.*.gross_pay' => 'required|numeric',
-        'payroll_results.*.net_pay' => 'required|numeric',
-        // Add more validation rules for other fields if necessary
-    ]);
+    public function savePayroll(Request $request, Payroll $payroll)
+    {
+        $request->validate([
+            'payroll_results' => 'required|array',
+            'payroll_results.*.employee_id' => 'required|string',
+            'payroll_results.*.gross_pay' => 'required|numeric',
+            'payroll_results.*.net_pay' => 'required|numeric',
+            // Add more validation rules for other fields if necessary
+        ]);
 
-    try {
-        // Prevent duplicate saving for the same payroll period
-        $existingPayrollDataRecords = PayrollData::where('payroll_id', $payroll->id)->count();
-        $existingDeductionRecords = Employee_deduction::where('payroll_id', $payroll->id)->count();
+        try {
+            // Prevent duplicate saving for the same payroll period
+            $existingPayrollDataRecords = PayrollData::where('payroll_id', $payroll->id)->count();
+            $existingDeductionRecords = Employee_deduction::where('payroll_id', $payroll->id)->count();
 
-        if ($existingPayrollDataRecords > 0 || $existingDeductionRecords > 0) {
+            if ($existingPayrollDataRecords > 0 || $existingDeductionRecords > 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payroll for this period has already been saved.'
+                ], 409); // 409 Conflict
+            }
+
+            // Determine if this is the first cutoff (for loan deductions)
+            $isFirstCutoff = !($payroll->to_date->day >= 11 && $payroll->to_date->day <= 25);
+
+            foreach ($request->input('payroll_results') as $result) {
+                // Process actual loan deductions only during save and only for first cutoff
+                $actualLoanDeduction = 0.00;
+                if ($isFirstCutoff) {
+                    $actualLoanDeduction = $this->processLoanDeduction(
+                        $result['employee_id'], 
+                        $payroll->from_date, 
+                        $payroll->to_date, 
+                        $payroll->id
+                    );
+                }
+
+                // Save to PayrollData model
+                PayrollData::create([
+                    'payroll_id' => $payroll->id,
+                    'employee_id' => $result['employee_id'],
+                    'payroll_start_date' => $result['payroll_start_date'],
+                    'payroll_end_date' => $result['payroll_end_date'],
+                    'gross_pay' => $result['gross_pay'],
+                    'basic_hours_pay' => $result['basic_hours_pay'],
+                    'night_differential_pay' => $result['night_differential_pay'],
+                    'regular_holiday_pay' => $result['regular_holiday_pay'],
+                    'special_holiday_pay' => $result['special_holiday_pay'],
+                    'overtime_pay' => $result['overtime_pay'],
+                    'late_deduction' => $result['late_deduction'],
+                    'undertime_deduction' => $result['undertime_deduction'],
+                    'sss_contribution' => $result['sss_contribution'], 
+                    'philhealth_contribution' => $result['philhealth_contribution'], 
+                    'pagibig_contribution' => $result['pagibig_contribution'], 
+                    'tax_withheld' => $result['tax_withheld'],
+                    'loan_deduction' => $actualLoanDeduction, // Use actual processed loan deduction
+                    'other_deductions' => $result['other_deductions'], 
+                    'total_deductions' => $result['total_deductions'],
+                    'net_pay' => $result['net_pay'],
+                    'processed_by' => Auth::id(),
+                ]);
+
+                // Save to Employee_deduction model
+                Employee_deduction::create([
+                    'employee_id' => $result['employee_id'],
+                    'payroll_id' => $payroll->id,
+                    'monthly_salary' => $result['gross_pay'],
+                    'sss_employee_contribution' => $result['sss_contribution'],
+                    'sss_employer_contribution' => $result['sss_employer_contribution'],
+                    'pagibig_employee_contribution' => $result['pagibig_contribution'],
+                    'pagibig_employer_contribution' => $result['pagibig_employer_contribution'],
+                    'philhealth_employee_contribution' => $result['philhealth_contribution'],
+                    'philhealth_employer_contribution' => $result['philhealth_employer_contribution'],
+                    'withholdingtax' => $result['tax_withheld'],
+                    'total_employee_deduction' => $result['total_deductions'],
+                    'total_employer_deduction' => $result['total_employer_contributions'], 
+                ]);
+            }
+
+            // Update the payroll's status in the payrolls table
+            $payroll->status = 'Processed';
+            $payroll->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payroll successfully saved for ' . $payroll->title
+            ], 200);
+
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Payroll for this period has already been saved.'
-            ], 409); // 409 Conflict
+                'message' => 'Failed to save payroll.',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        foreach ($request->input('payroll_results') as $result) {
-            // Save to PayrollData model
-            PayrollData::create([
-                'payroll_id' => $payroll->id,
-                'employee_id' => $result['employee_id'],
-                'payroll_start_date' => $result['payroll_start_date'],
-                'payroll_end_date' => $result['payroll_end_date'],
-                'gross_pay' => $result['gross_pay'],
-                'basic_hours_pay' => $result['basic_hours_pay'],
-                'night_differential_pay' => $result['night_differential_pay'],
-                'regular_holiday_pay' => $result['regular_holiday_pay'],
-                'special_holiday_pay' => $result['special_holiday_pay'],
-                'overtime_pay' => $result['overtime_pay'],
-                'late_deduction' => $result['late_deduction'],
-                'undertime_deduction' => $result['undertime_deduction'],
-                'sss_contribution' => $result['sss_contribution'], 
-                'philhealth_contribution' => $result['philhealth_contribution'], 
-                'pagibig_contribution' => $result['pagibig_contribution'], 
-                'tax_withheld' => $result['tax_withheld'],
-                'other_deductions' => $result['other_deductions'], 
-                'total_deductions' => $result['total_deductions'],
-                'net_pay' => $result['net_pay'],
-                'processed_by' => Auth::id(),
-            ]);
-
-            // Save to Employee_deduction model
-            Employee_deduction::create([
-                'employee_id' => $result['employee_id'],
-                'payroll_id' => $payroll->id,
-                'monthly_salary' => $result['gross_pay'],
-                'sss_employee_contribution' => $result['sss_contribution'],
-                'sss_employer_contribution' => $result['sss_employer_contribution'],
-                'pagibig_employee_contribution' => $result['pagibig_contribution'],
-                'pagibig_employer_contribution' => $result['pagibig_employer_contribution'],
-                'philhealth_employee_contribution' => $result['philhealth_contribution'],
-                'philhealth_employer_contribution' => $result['philhealth_employer_contribution'],
-                'withholdingtax' => $result['tax_withheld'],
-                'total_employee_deduction' => $result['total_deductions'],
-                'total_employer_deduction' => $result['total_employer_contributions'], 
-            ]);
-        }
-
-        // Update the payroll's status in the payrolls table
-        $payroll->status = 'Processed';
-        $payroll->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Payroll successfully saved for ' . $payroll->title
-        ], 200);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Failed to save payroll.',
-            'error' => $e->getMessage()
-        ], 500);
     }
-}
 
     /**
      * Show the form for creating a new resource.
