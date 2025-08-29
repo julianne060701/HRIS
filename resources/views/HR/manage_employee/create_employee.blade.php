@@ -104,9 +104,17 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="department">Department</label>
-                            <input type="text" name="department" class="form-control" placeholder="Department" required>
-                        </div>
+    <label for="department">Department</label>
+    <select name="department" id="department" class="form-control department-select" required>
+        <option value="">Select Department</option>
+        @foreach($departments as $dept)
+            <option value="{{ $dept->name }}">{{ $dept->name }}</option>
+        @endforeach
+    </select>
+</div>
+
+
+
 
                         <div class="form-group">
                             <label for="salary">Salary</label>
@@ -126,6 +134,22 @@
 
 
 @section('js')
+{{-- Select2 CSS & JS --}}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    $(document).ready(function() {
+        $('.department-select').select2({
+            placeholder: "Select Department",
+            allowClear: true,
+            width: '100%',
+            theme: 'classic' // or 'bootstrap4' if you’re using bootstrap4
+        });
+    });
+</script>
+
+
 <script>
     document.getElementById('resume')?.addEventListener('change', function(event) {
         const inputFile = event.target;

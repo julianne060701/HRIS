@@ -26,15 +26,16 @@
                         'Plotted Schedule', // Changed header to be more generic for shifts or leaves
                         'Actual Time In',
                         'Actual Time Out',
+                        'Actions' // Placeholder for future actions like edit/delete
                     ];
 
                     $config = [
                         'order' => [[2, 'desc']], // Order by date descending
                         'columns' => array_fill(0, count($heads), ['orderable' => true]),
-                        'paging' => false,       // Disable pagination
+                        'paging' => true,       // Disable pagination
                         'info' => false,         // Disable info text (showing 1 to X of Y entries)
                         'searching' => true,     // Keep search enabled if desired
-                        'pageLength' => -1,      // Show all entries. -1 means no limit.
+                        'pageLength' => 10,      // Show all entries. -1 means no limit.
                         'responsive' => true,    // Make table responsive
                     ];
                 @endphp

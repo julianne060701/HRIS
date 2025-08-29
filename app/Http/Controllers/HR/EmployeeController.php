@@ -5,6 +5,7 @@ namespace App\Http\Controllers\HR;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Employee;
+use Illuminate\Support\Facades\DB;
 
 class EmployeeController extends Controller
 {
@@ -50,7 +51,8 @@ class EmployeeController extends Controller
 
     public function create()
     {
-        return view('HR.manage_employee.create_employee');
+        $departments = DB::table('departments')->get();
+        return view('HR.manage_employee.create_employee', compact('departments'));
     }
       public function store(Request $request)
     {

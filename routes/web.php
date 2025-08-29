@@ -18,7 +18,8 @@
     use App\Http\Controllers\Leave\LeaveManagementController;
     use App\Http\Controllers\Leave\LeaveCreditController;
     use App\Http\Controllers\Payroll\ProcessPayrollController;
-
+    use App\Http\Controllers\HR\DepartmentController;
+    use App\Http\Controllers\Payroll\PrintingController;
 
 
 
@@ -65,6 +66,8 @@
         Route::get('/HR/delete_employee/{id}', [EmployeeController::class, 'delete'])->name('HR.delete_employee');
 
         Route::get('/HR/manage_employee/attendance', [EmployeeController::class, 'attendance'])->name('HR.manage_employee.attendance');
+        Route::get('/HR/manage_employee/department', [DepartmentController::class, 'index'])->name('HR.manage_employee.department');
+        Route::post('/departments/store', [DepartmentController::class, 'store'])->name('HR.departments.store');
 
         /**
          * =====================
@@ -79,6 +82,14 @@
         Route::post('/HR/payroll/store', [AddPayrollController::class, 'store'])->name('add-payroll.store');
         Route::get('/cutoff-dates', [AddPayrollController::class, 'getCurrentCutoff'])->name('cutoff.dates');
 
+          /**
+         * =====================
+         * Printing Routes
+         * =====================
+         */
+        Route::get('/HR/payroll/printing', [PrintingController::class, 'index'])->name('HR.payroll.printing');
+        Route::post('/printing/employees', [PrintingController::class, 'getEmployeesByPayroll'])->name('printing.employees');
+        Route::post('/printing/payslip', [PrintingController::class, 'getEmployeePayslip'])->name('printing.payslip');
         /**
          * =====================
          * Attendance Routes

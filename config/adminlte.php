@@ -348,6 +348,11 @@ return [
                     'icon' => 'fas fa-fw fa-user-plus',
                 ],
                 [
+                    'text' => 'Manage Department',
+                    'url'  => 'HR/manage_employee/department',
+                    'icon' => 'fas fa-fw fa-building',
+                ],
+                [
                     'text' => 'Employee Attendance',
                     'url'  => 'HR/manage_employee/attendance',
                     'icon' => 'fas fa-fw fa-calendar-check',
@@ -398,8 +403,8 @@ return [
                 ],
 
                 [
-                    'text' => 'Deductions',
-                    'url'  => 'payroll/deductions',
+                    'text' => 'Printing Payslip',
+                    'url'  => 'HR/payroll/printing',
                 ],
                 [
                     'text' => 'Salary Rates',
