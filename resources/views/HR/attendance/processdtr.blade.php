@@ -70,6 +70,17 @@
                             </td>
                             <td>{{ $row->actual_time_in ? \Carbon\Carbon::parse($row->actual_time_in)->format('h:i A') : 'N/A' }}</td>
                             <td>{{ $row->actual_time_out ? \Carbon\Carbon::parse($row->actual_time_out)->format('h:i A') : 'N/A' }}</td>
+
+                            <td>
+    <button type="button" class="btn btn-sm btn-warning edit-btn"
+        data-id="{{ $row->employee_id }}"
+        data-date="{{ $row->date }}"
+        data-time-in="{{ $row->actual_time_in }}"
+        data-time-out="{{ $row->actual_time_out }}">
+        Edit
+    </button>
+</td>
+
                         </tr>
                     @empty
                         <tr>
@@ -82,10 +93,63 @@
             </form>
         </div>
     </div>
+    <div class="modal fade" id="editModal" tabindex="-1" aria-labelledby="editModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+  <form id="editForm" method="POST" action="">
+        @csrf
+        @method('PUT')
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editModalLabel">Edit Actual Time</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                  <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="employee_id" id="employee_id">
+                <input type="hidden" name="date" id="date">
+
+                <div class="form-group">
+                    <label for="time_in">Actual Time In</label>
+                    <input type="time" class="form-control" name="time_in" id="time_in">
+                </div>
+                <div class="form-group">
+                    <label for="time_out">Actual Time Out</label>
+                    <input type="time" class="form-control" name="time_out" id="time_out">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </div>
+    </form>
+  </div>
+</div>
+
 @stop
 
 @section('js')
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+$(document).on("click", ".edit-btn", function() {
+    let employeeId = $(this).data("id");
+    let date = $(this).data("date");
+    let timeIn = $(this).data("time-in");
+    let timeOut = $(this).data("time-out");
+
+    // Set form action dynamically → resource update
+    let url = "/payroll/process-dtr/" + employeeId; 
+    $("#editForm").attr("action", url);
+
+    $("#employee_id").val(employeeId);
+    $("#date").val(date);
+    $("#time_in").val(timeIn ? new Date(timeIn).toISOString().slice(11,16) : '');
+    $("#time_out").val(timeOut ? new Date(timeOut).toISOString().slice(11,16) : '');
+
+    $("#editModal").modal("show");
+});
+
+</script>
 @stop
 @section('css')
     <style>

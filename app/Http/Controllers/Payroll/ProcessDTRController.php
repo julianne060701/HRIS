@@ -536,10 +536,28 @@ class ProcessDTRController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(Request $request, $id)
     {
-        //
+        $request->validate([
+            'employee_id' => 'required',
+            'date' => 'required|date',
+            'time_in' => 'nullable|date_format:H:i',
+            'time_out' => 'nullable|date_format:H:i',
+        ]);
+    
+        DB::table('attendance')
+            ->where('employee_id', $id)
+            ->whereDate('transindate', $request->date)
+            ->update([
+                'time_in' => $request->time_in ? Carbon::parse($request->date.' '.$request->time_in) : null,
+                'time_out' => $request->time_out ? Carbon::parse($request->date.' '.$request->time_out) : null,
+                'updated_at' => now(),
+            ]);
+    
+        return redirect()->route('payroll.process-dtr.index')
+                         ->with('success', 'Actual Time updated successfully!');
     }
+    
 
     /**
      * Remove the specified resource from storage.

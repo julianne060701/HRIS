@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Payroll;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class PrintingController extends Controller
 {
@@ -12,8 +13,7 @@ class PrintingController extends Controller
      */
     public function index()
     {
-        // Get unique payroll codes from your database
-        // Replace this with your actual logic to fetch payroll codes
+        // Get unique payroll codes from payrolldata table
         $payrolls = $this->getPayrollCodes();
         
         return view('HR.payroll.printing', compact('payrolls'));
@@ -26,7 +26,7 @@ class PrintingController extends Controller
     {
         $payrollCode = $request->input('payroll_code');
         
-        // Replace this with your actual database query
+        // Get employees with payslips for the selected payroll
         $employees = $this->getEmployeesWithPayslips($payrollCode);
         
         return response()->json($employees);
@@ -40,7 +40,7 @@ class PrintingController extends Controller
         $employeeId = $request->input('employee_id');
         $payrollCode = $request->input('payroll_code');
         
-        // Replace this with your actual database query
+        // Get complete payslip data for the employee
         $payslipData = $this->getEmployeePayslipData($employeeId, $payrollCode);
         
         return response()->json($payslipData);
@@ -95,105 +95,138 @@ class PrintingController extends Controller
     }
     
     /**
-     * Private helper methods - replace with your actual database logic
+     * Get distinct payroll codes from payrolldata table
      */
     private function getPayrollCodes()
     {
-        // Example: Get distinct payroll codes from your payslips table
-        // return DB::table('payslips')->distinct()->pluck('payroll_code')->toArray();
-        
-        // For now, return sample data
-        return [
-            '2024-01-01',
-            '2024-01-15',
-            '2024-02-01',
-            '2024-02-15'
-        ];
+        return DB::table('payrolldata')
+            ->distinct()
+            ->pluck('payroll_id')
+            ->sort()
+            ->values()
+            ->toArray();
     }
     
+    /**
+     * Get employees with payslips for a specific payroll code
+     */
     private function getEmployeesWithPayslips($payrollCode)
     {
-        // Example database query:
-        /*
-        return DB::table('payslips')
-            ->join('employees', 'payslips.employee_id', '=', 'employees.id')
-            ->where('payslips.payroll_code', $payrollCode)
+        return DB::table('payrolldata')
+            ->join('employees', 'payrolldata.employee_id', '=', 'employees.id')
+            ->where('payrolldata.payroll_id', $payrollCode)
             ->select([
-                'employees.id',
+                'payrolldata.id',
                 'employees.employee_id',
                 'employees.first_name',
                 'employees.last_name',
                 'employees.position',
-                'payslips.present_days',
-                'payslips.net_pay'
+                'payrolldata.net_pay',
+                // Calculate present days from basic_hours_pay if you don't store it directly
+                DB::raw('COALESCE(payrolldata.basic_hours_pay / (employees.salary / 22 / 8), 0) as present_days')
             ])
-            ->get();
-        */
-        
-        // Sample data for testing
-        if ($payrollCode === '2024-01-01') {
-            return [
-                [
-                    'id' => 1,
-                    'employee_id' => 'EMP001',
-                    'first_name' => 'John',
-                    'last_name' => 'Doe',
-                    'position' => 'Software Engineer',
-                    'present_days' => 22,
-                    'net_pay' => 48675.00
-                ],
-                [
-                    'id' => 2,
-                    'employee_id' => 'EMP002',
-                    'first_name' => 'Jane',
-                    'last_name' => 'Smith',
-                    'position' => 'HR Manager',
-                    'present_days' => 20,
-                    'net_pay' => 42287.50
-                ]
-            ];
-        }
-        
-        return [];
+            ->get()
+            ->map(function ($employee) {
+                return [
+                    'id' => $employee->id,
+                    'employee_id' => $employee->employee_id,
+                    'first_name' => $employee->first_name,
+                    'last_name' => $employee->last_name,
+                    'position' => $employee->position,
+                    'present_days' => round($employee->present_days, 1),
+                    'net_pay' => $employee->net_pay
+                ];
+            })
+            ->toArray();
     }
     
+    /**
+     * Get complete payslip data for a specific employee and payroll
+     */
     private function getEmployeePayslipData($employeeId, $payrollCode)
     {
-        // Example database query:
-        /*
-        return DB::table('payslips')
-            ->join('employees', 'payslips.employee_id', '=', 'employees.id')
-            ->where('payslips.employee_id', $employeeId)
-            ->where('payslips.payroll_code', $payrollCode)
+        // Get the payroll record
+        $payrollRecord = DB::table('payrolldata')
+            ->join('employees', 'payrolldata.employee_id', '=', 'employees.id')
+            ->where('payrolldata.id', $employeeId)
+            ->where('payrolldata.payroll_id', $payrollCode)
             ->select([
-                'employees.*',
-                'payslips.*'
+                'employees.employee_id',
+                'employees.first_name',
+                'employees.last_name',
+                'employees.position',
+                'employees.salary',
+                'payrolldata.*'
             ])
             ->first();
-        */
-        
-        // Sample data for testing
+
+        if (!$payrollRecord) {
+            return null;
+        }
+
+        // Calculate present days from basic hours pay
+        $dailyRate = $payrollRecord->salary / 22;
+        $hourlyRate = $dailyRate / 8;
+        $presentDays = $payrollRecord->basic_hours_pay > 0 ? 
+            round($payrollRecord->basic_hours_pay / $hourlyRate / 8, 1) : 0;
+
+        // Calculate undertime and tardy in minutes (assuming deductions are in monetary value)
+        $minuteRate = $hourlyRate / 60;
+        $undertimeMinutes = $minuteRate > 0 ? round($payrollRecord->undertime_deduction / $minuteRate) : 0;
+        $lateMinutes = $minuteRate > 0 ? round($payrollRecord->late_deduction / $minuteRate) : 0;
+
+        // Prepare earnings array
+        $earnings = [];
+        if ($payrollRecord->night_differential_pay > 0) {
+            $earnings[] = ['name' => 'Night Differential', 'amount' => $payrollRecord->night_differential_pay];
+        }
+        if ($payrollRecord->regular_holiday_pay > 0) {
+            $earnings[] = ['name' => 'Regular Holiday Pay', 'amount' => $payrollRecord->regular_holiday_pay];
+        }
+        if ($payrollRecord->special_holiday_pay > 0) {
+            $earnings[] = ['name' => 'Special Holiday Pay', 'amount' => $payrollRecord->special_holiday_pay];
+        }
+        if ($payrollRecord->overtime_pay > 0) {
+            $earnings[] = ['name' => 'Overtime Pay', 'amount' => $payrollRecord->overtime_pay];
+        }
+
+        // Prepare deductions array
+        $deductions = [];
+        if ($payrollRecord->sss_contribution > 0) {
+            $deductions[] = ['name' => 'SSS', 'amount' => $payrollRecord->sss_contribution];
+        }
+        if ($payrollRecord->philhealth_contribution > 0) {
+            $deductions[] = ['name' => 'PhilHealth', 'amount' => $payrollRecord->philhealth_contribution];
+        }
+        if ($payrollRecord->pagibig_contribution > 0) {
+            $deductions[] = ['name' => 'Pag-IBIG', 'amount' => $payrollRecord->pagibig_contribution];
+        }
+        if ($payrollRecord->loan_deduction > 0) {
+            $deductions[] = ['name' => 'Loan Deduction', 'amount' => $payrollRecord->loan_deduction];
+        }
+        if ($payrollRecord->other_deductions > 0) {
+            $deductions[] = ['name' => 'Other Deductions', 'amount' => $payrollRecord->other_deductions];
+        }
+
         return [
-            'id' => $employeeId,
-            'employeeId' => 'EMP001',
-            'employeeName' => 'John Doe',
-            'position' => 'Software Engineer',
-            'salary' => 50000,
-            'presentDays' => 22,
-            'undertime' => 0,
-            'tardy' => 30,
-            'withholdingTax' => 2500,
+            'id' => $payrollRecord->id,
+            'employeeId' => $payrollRecord->employee_id,
+            'employeeName' => $payrollRecord->first_name . ' ' . $payrollRecord->last_name,
+            'position' => $payrollRecord->position,
+            'salary' => $payrollRecord->salary,
+            'presentDays' => $presentDays,
+            'undertime' => $undertimeMinutes,
+            'tardy' => $lateMinutes,
+            'withholdingTax' => $payrollRecord->tax_withheld,
             'payroll' => $payrollCode,
-            'earnings' => [
-                ['name' => 'Overtime', 'amount' => 2000],
-                ['name' => 'Allowance', 'amount' => 1500]
-            ],
-            'deductions' => [
-                ['name' => 'SSS', 'amount' => 500],
-                ['name' => 'Pag-IBIG', 'amount' => 200],
-                ['name' => 'PhilHealth', 'amount' => 625]
-            ],
-            'netPay' => 48675
+            'payrollStartDate' => $payrollRecord->payroll_start_date,
+            'payrollEndDate' => $payrollRecord->payroll_end_date,
+            'grossPay' => $payrollRecord->gross_pay,
+            'basicHoursPay' => $payrollRecord->basic_hours_pay,
+            'totalDeductions' => $payrollRecord->total_deductions,
+            'netPay' => $payrollRecord->net_pay,
+            'earnings' => $earnings,
+            'deductions' => $deductions
         ];
     }
 }

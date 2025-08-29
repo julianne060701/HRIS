@@ -142,9 +142,10 @@
         Route::get('/HR/attendance/processdtr', [ProcessDTRController::class, 'index'])->name('HR.attendance.processdtr');
         Route::get('/attendance/processdata', [ProcessDTRController::class, 'getProcessedDTR'])->name('attendance.processdata');
         Route::post('/payroll/processdtr', [ProcessDTRController::class, 'store'])->name('processdtr.store');
-       Route::resource('payroll/process-dtr', ProcessDTRController::class)->names([
-    'index' => 'payroll.process-dtr.index',
-    'store' => 'payroll.process-dtr.store',]); });
+       Route::resource('payroll/process-dtr', ProcessDTRController::class)->names(['index' => 'payroll.process-dtr.index','store' => 'payroll.process-dtr.store',]); });
+       Route::put('/payroll/process-dtr/update', [PrintingController::class, 'update'])
+       ->name('payroll.process-dtr.update');
+       
 
     //Overtime
     Route::get('/HR/overtime/overtime_filing', [OvertimeFilingController::class, 'index'])->name('HR.overtime.overtime_filing'); 
