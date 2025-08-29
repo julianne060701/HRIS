@@ -10,15 +10,16 @@ class loan extends Model
     use HasFactory;
 
     protected $fillable = [
-        'employee_id',
-        'loan_type',
-        'original_amount',
-        'balance',
-        'amortization_amount',
-        'start_date',
-        'end_date',
-        'status',
-    ];
+    'employee_id',
+    'loan_type', 
+    'original_amount',
+    'balance',
+    'amortization_amount',
+    'start_date',
+    'end_date',
+    'numer_terms',
+    'status'
+        ];
 
     // Define relationship with Employee
     public function employee()

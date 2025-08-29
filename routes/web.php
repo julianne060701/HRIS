@@ -18,6 +18,7 @@
     use App\Http\Controllers\Leave\LeaveManagementController;
     use App\Http\Controllers\Leave\LeaveCreditController;
     use App\Http\Controllers\Payroll\ProcessPayrollController;
+    use App\Http\Controllers\HR\LoanController;
 
 
 
@@ -182,7 +183,12 @@
     Route::get('/payroll-date-ranges', [ProcessPayrollController::class, 'fetchPayrollDateRanges']);
     Route::get('/payroll-date-ranges/{id}', [ProcessPayrollController::class, 'fetchSpecificPayrollDateRange']);
 
-
+    //loan
+    Route::get('/HR/loan/addloan', [LoanController::class, 'index'])->name('HR.loan.addloan');
+    Route::post('/loan', [LoanController::class, 'store'])->name('loan.store');
+    Route::post('loan/calculate-terms', [LoanController::class, 'calculateLoanTerms'])->name('loan.calculate-terms');
+    Route::post('loan/{id}/payment', [LoanController::class, 'recordPayment'])->name('loan.payment');
+    
 
     // Authentication routes (login, register, etc.)
     require __DIR__.'/auth.php';
