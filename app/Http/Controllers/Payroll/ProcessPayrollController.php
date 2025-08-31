@@ -22,14 +22,14 @@ class ProcessPayrollController extends Controller
      * Display a listing of the resource.
      */
     public function index()
-    {
-        $payrollPeriods = Payroll::orderBy('to_date', 'desc')
-                                ->select('id', 'payroll_code', 'title', 'from_date', 'to_date')
-                                ->get();
+{
+    $payrollPeriods = Payroll::orderBy('to_date', 'desc')
+                            ->select('id', 'payroll_code', 'title', 'from_date', 'to_date', 'status')
+                            ->get();
 
-        // Return the view, passing the payroll periods.
-        return view('HR.payroll.process', compact('payrollPeriods'));
-    }
+    // Return the view, passing the payroll periods.
+    return view('HR.payroll.process', compact('payrollPeriods'));
+}
 
     public function fetchPayrollDateRanges()
     {

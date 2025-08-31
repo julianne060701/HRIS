@@ -32,6 +32,7 @@
                                         <th>Title</th>
                                         <th>From Date</th>
                                         <th>To Date</th>
+                                        <th>Status</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -45,10 +46,27 @@
                                             <td>{{ \Carbon\Carbon::parse($period->from_date)->format('M d, Y') }}</td>
                                             <td>{{ \Carbon\Carbon::parse($period->to_date)->format('M d, Y') }}</td>
                                             <td>
-                                                <a href="{{ url('payroll/process/' . $period->id) }}" 
-                                                   class="btn btn-primary btn-sm">
-                                                    <i class="fas fa-cogs"></i> Process
-                                                </a>
+                                                @if($period->status == 'Processed')
+                                                    <span class="badge badge-success">
+                                                        <i class="fas fa-check"></i> Processed
+                                                    </span>
+                                                @else
+                                                    <span class="badge badge-warning">
+                                                        <i class="fas fa-clock"></i> Pending
+                                                    </span>
+                                                @endif
+                                            </td>
+                                            <td>
+                                                @if($period->status == 'Processed')
+                                                    <button class="btn btn-secondary btn-sm" disabled title="Already processed">
+                                                        <i class="fas fa-check"></i> Processed
+                                                    </button>
+                                                @else
+                                                    <a href="{{ url('payroll/process/' . $period->id) }}" 
+                                                       class="btn btn-primary btn-sm">
+                                                        <i class="fas fa-cogs"></i> Process
+                                                    </a>
+                                                @endif
                                             </td>
                                         </tr>
                                     @endforeach
