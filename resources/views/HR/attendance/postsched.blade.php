@@ -21,7 +21,7 @@
             <select id="departmentSelect" class="form-control w-auto d-inline mx-2">
                 <option value="">-- All Departments --</option>
                 @foreach(\App\Models\Employee::select('department')->distinct()->get() as $dept)
-                    <option value="{{ $dept->department }}">{{ $dept->department }}</option>
+                <option value="{{ $dept->department }}">{{ $dept->department }}</option>
                 @endforeach
             </select>
         </div>
@@ -50,7 +50,7 @@
 
 @section('js')
 <script>
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', function() {
     const cutoffBtn = document.getElementById('cutoff_btn');
     const fetchScheduleBtn = document.getElementById('fetch_schedule_btn'); // New button
     const minDate = document.getElementById('minDate');
@@ -60,27 +60,27 @@ document.addEventListener('DOMContentLoaded', function () {
     const endInput = document.getElementById('form_end_date');
     let currentDateArray = [];
 
-    function getCutoffDatesFromNow() {
-        const today = new Date();
-        const day = today.getDate();
-        const month = today.getMonth();
-        const year = today.getFullYear();
+    // function getCutoffDatesFromNow() {
+    //     const today = new Date();
+    //     const day = today.getDate();
+    //     const month = today.getMonth();
+    //     const year = today.getFullYear();
 
-        let start, end;
+    //     let start, end;
 
-        if (day <= 15) {
-            start = new Date(year, month, 11);
-            end = new Date(year, month, 25);
-        } else {
-            start = new Date(year, month, 26);
-            end = new Date(year, month + 1, 10);
-        }
+    //     if (day <= 15) {
+    //         start = new Date(year, month, 11);
+    //         end = new Date(year, month, 25);
+    //     } else {
+    //         start = new Date(year, month, 26);
+    //         end = new Date(year, month + 1, 10);
+    //     }
 
-        return {
-            start_date: start.toISOString().split('T')[0],
-            end_date: end.toISOString().split('T')[0],
-        };
-    }
+    //     return {
+    //         start_date: start.toISOString().split('T')[0],
+    //         end_date: end.toISOString().split('T')[0],
+    //     };
+    // }
 
     // Function to populate header dates
     function populateScheduleHeader(startDate, endDate) {
@@ -94,7 +94,9 @@ document.addEventListener('DOMContentLoaded', function () {
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             const current = new Date(d);
             const formatted = current.toISOString().split('T')[0];
-            const weekday = current.toLocaleDateString('en-US', { weekday: 'short' });
+            const weekday = current.toLocaleDateString('en-US', {
+                weekday: 'short'
+            });
 
             currentDateArray.push(formatted);
             const th = document.createElement('th');
@@ -104,7 +106,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Event listener for "Get Current Cutoff Dates" button
-    cutoffBtn.addEventListener('click', function () {
+    cutoffBtn.addEventListener('click', function() {
         const dates = getCutoffDatesFromNow();
 
         minDate.value = dates.start_date;
@@ -117,7 +119,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     // Event listener for the new "Fetch Schedule" button
-    fetchScheduleBtn.addEventListener('click', function () {
+    fetchScheduleBtn.addEventListener('click', function() {
         const startDate = minDate.value;
         const endDate = maxDate.value;
 
@@ -135,7 +137,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
 
-    departmentSelect.addEventListener('change', function () {
+    departmentSelect.addEventListener('change', function() {
         if (minDate.value && maxDate.value) {
             loadSchedule(minDate.value, maxDate.value, this.value);
         }
@@ -158,7 +160,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 if (scheduleData.length === 0) {
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `<td colspan="${currentDateArray.length + 1}" class="text-center">No employees found for this department or date range.</td>`;
+                    tr.innerHTML =
+                        `<td colspan="${currentDateArray.length + 1}" class="text-center">No employees found for this department or date range.</td>`;
                     tbody.appendChild(tr);
                     return;
                 }
@@ -168,7 +171,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     tr.innerHTML = `<td>${row.name}</td>`;
 
                     currentDateArray.forEach(date => {
-                        const actualShiftOrLeave = row.schedules?.[date] || ''; // Get the value that was stored
+                        const actualShiftOrLeave = row.schedules?. [date] ||
+                            ''; // Get the value that was stored
                         const select = document.createElement('select');
                         select.name = `schedule[${row.employee_id}][${date}]`;
                         select.className = 'form-control form-control-sm';
@@ -203,29 +207,29 @@ document.addEventListener('DOMContentLoaded', function () {
             });
     }
 
-    document.getElementById('pstschd_btn').addEventListener('click', function (e) {
+    document.getElementById('pstschd_btn').addEventListener('click', function(e) {
         e.preventDefault();
         const form = document.getElementById('scheduleForm');
 
         fetch(form.action, {
-            method: 'POST',
-            body: new FormData(form),
-            headers: {
-                'X-CSRF-TOKEN': '{{ csrf_token() }}'
-            }
-        })
-        .then(res => res.json())
-        .then(data => {
-            alert(data.message || 'Schedule posted successfully!');
-            // After successful post, reload the schedule to show updated status
-            if (minDate.value && maxDate.value) {
-                loadSchedule(minDate.value, maxDate.value, departmentSelect.value);
-            }
-        })
-        .catch(err => {
-            console.error('Schedule Post Error:', err);
-            alert('An error occurred while posting the schedule. Please try again.');
-        });
+                method: 'POST',
+                body: new FormData(form),
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message || 'Schedule posted successfully!');
+                // After successful post, reload the schedule to show updated status
+                if (minDate.value && maxDate.value) {
+                    loadSchedule(minDate.value, maxDate.value, departmentSelect.value);
+                }
+            })
+            .catch(err => {
+                console.error('Schedule Post Error:', err);
+                alert('An error occurred while posting the schedule. Please try again.');
+            });
     });
 
     // Initial load: If dates are not pre-filled, automatically get and display the current cutoff dates on page load
@@ -239,16 +243,16 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <style>
-    #schedulepost thead th:first-child,
-    #schedulepost tbody td:first-child {
-        position: sticky;
-        left: 0;
-        background-color: #fff;
-        z-index: 1;
-    }
+#schedulepost thead th:first-child,
+#schedulepost tbody td:first-child {
+    position: sticky;
+    left: 0;
+    background-color: #fff;
+    z-index: 1;
+}
 
-    #schedulepost {
-        white-space: nowrap;
-    }
+#schedulepost {
+    white-space: nowrap;
+}
 </style>
 @stop
