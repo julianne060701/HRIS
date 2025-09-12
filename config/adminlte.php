@@ -399,7 +399,7 @@ return [
                 ],
                 [
                     'text' => 'Generate Payslip',
-                    'url'  => 'HR/payroll/generate',
+                    'url'  => 'HR/payslip/batch',
                 ],
 
                 [
