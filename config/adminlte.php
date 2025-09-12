@@ -425,11 +425,11 @@ return [
                     'url'  => '/HR/loan/addloan',
                     'icon' => 'fas fa-fingerprint',
                 ],
-                [
-                    'text' => 'Process DTR',
-                    'url'  => 'HR/attendance/processdtr',
-                    'icon' => 'fas fa-cogs',
-                ],
+                // [
+                //     'text' => 'Process DTR',
+                //     'url'  => 'HR/attendance/processdtr',
+                //     'icon' => 'fas fa-cogs',
+                // ],
             ],
         ],
         [
@@ -440,6 +440,11 @@ return [
                     'text' => 'Import DTR',
                     'url'  => '/HR/attendance/importdtr',
                     'icon' => 'fas fa-fingerprint',
+                ],
+                [
+                    'text' => 'Manual Attendance',
+                    'url'  => '/HR/attendance/manualattendance',
+                    'icon' => 'fas fa-hand-paper',
                 ],
                 [
                     'text' => 'Process DTR',

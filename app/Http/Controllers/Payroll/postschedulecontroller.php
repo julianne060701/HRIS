@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Payroll;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use App\Models\SchedPost; // This model seems unused, consider removing if not needed
 use App\Models\Schedule;
 use App\Models\EmployeeSchedule;
@@ -17,7 +18,25 @@ class postschedulecontroller extends Controller
      */
     public function index()
     {
-        return view('HR.attendance.postsched');
+        // Fetch payroll data for the dropdown
+        $payrollData = DB::table('payrolls')
+            ->select('id', 'payroll_code', 'title', 'from_date', 'to_date')
+            ->where('status', 'Active') // Only show active payrolls
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        // Convert to array format for consistency
+        $payrollData = $payrollData->map(function($payroll) {
+            return [
+                'id' => $payroll->id,
+                'payroll_code' => $payroll->payroll_code,
+                'title' => $payroll->title,
+                'from_date' => $payroll->from_date,
+                'to_date' => $payroll->to_date,
+            ];
+        })->toArray();
+
+        return view('HR.attendance.postsched', compact('payrollData'));
     }
 
     /**
@@ -45,10 +64,19 @@ class postschedulecontroller extends Controller
     public function store(Request $request)
     {
         $schedules = $request->input('schedule');
+        $payrollId = $request->input('payroll_id');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
 
         if (!$schedules || !is_array($schedules)) {
             return response()->json(['message' => 'No schedules provided.'], 422);
         }
+
+        if (!$payrollId) {
+            return response()->json(['message' => 'Payroll ID is required.'], 422);
+        }
+
+        $updatedCount = 0;
 
         foreach ($schedules as $employeeId => $dates) {
             foreach ($dates as $date => $selectedOption) {
@@ -76,12 +104,16 @@ class postschedulecontroller extends Controller
                     [
                         'shift_code' => $actualShiftCode,
                         'leave_type_id' => $leaveTypeId,
+                        'payroll_id' => $payrollId, // Associate with payroll
                     ]
                 );
+                $updatedCount++;
             }
         }
 
-        return response()->json(['message' => 'Schedules posted successfully!']);
+        return response()->json([
+            'message' => "Schedules posted successfully! Updated {$updatedCount} schedule entries for payroll period {$startDate} to {$endDate}."
+        ]);
     }
 
     /**
@@ -116,7 +148,7 @@ class postschedulecontroller extends Controller
         //
     }
 
-  public function getScheduleData(Request $request)
+    public function getScheduleData(Request $request)
     {
         $from = $request->query('from');
         $to = $request->query('to');

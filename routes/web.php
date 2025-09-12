@@ -19,7 +19,9 @@
     use App\Http\Controllers\Leave\LeaveCreditController;
     use App\Http\Controllers\Payroll\ProcessPayrollController;
     use App\Http\Controllers\HR\LoanController;
-
+    use App\Http\Controllers\HR\DepartmentController;
+    use App\Http\Controllers\Payroll\PrintingController;
+    use App\Http\Controllers\Hr\ManualAttController;
 
 
 
@@ -69,6 +71,31 @@
         Route::get('/HR/manage_employee/department', [DepartmentController::class, 'index'])->name('HR.manage_employee.department');
         Route::post('/departments/store', [DepartmentController::class, 'store'])->name('HR.departments.store');
 
+        Route::get('/HR/attendance/manualattendance', [ManualAttController::class, 'index'])->name('HR.attendance.manualattendance');
+        Route::post('/manualattendance', [ManualAttController::class, 'store'])
+        ->name('HR.attendance.manualattendance.store');
+    
+    // Show specific attendance record
+    Route::get('/manualattendance/{id}', [ManualAttController::class, 'show'])
+        ->name('HR.attendance.manualattendance.show');
+    
+    // Edit attendance record
+    Route::get('/manualattendance/{id}/edit', [ManualAttController::class, 'edit'])
+        ->name('HR.attendance.manualattendance.edit');
+    
+    // Update attendance record
+    Route::put('/manualattendance/{id}', [ManualAttController::class, 'update'])
+        ->name('HR.attendance.manualattendance.update');
+    
+    // Delete attendance record
+    Route::delete('/manualattendance/{id}', [ManualAttController::class, 'destroy'])
+        ->name('HR.attendance.manualattendance.destroy');
+    
+    // Additional API routes for filtering
+    Route::get('/manualattendance/by-employee', [ManualAttController::class, 'getByEmployee'])
+        ->name('HR.attendance.manualattendance.by-employee');
+    Route::get('/manualattendance/by-date-range', [ManualAttController::class, 'getByDateRange'])
+        ->name('HR.attendance.manualattendance.by-date-range');
         /**
          * =====================
          * Payroll Routes
