@@ -20,7 +20,7 @@
     use App\Http\Controllers\Payroll\ProcessPayrollController;
     use App\Http\Controllers\HR\LoanController;
     use App\Http\Controllers\Printing\BatchPrintingController;
-
+    use App\Http\Controllers\HR\ManualAttController;
 
 
 
