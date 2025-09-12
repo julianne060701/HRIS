@@ -40,9 +40,9 @@ class PayrollData extends Model
         return $this->belongsTo(Employee::class, 'employee_id', 'employee_id');
     }
 
-    public function payrollPeriod()
+    public function payroll()
     {
-        return $this->belongsTo(Payroll::class, 'payroll_id'); // Assuming 'payroll_id' column
+        return $this->belongsTo(Payroll::class, 'payroll_id'); 
     }
 
     public function processor()

@@ -19,6 +19,7 @@
     use App\Http\Controllers\Leave\LeaveCreditController;
     use App\Http\Controllers\Payroll\ProcessPayrollController;
     use App\Http\Controllers\HR\LoanController;
+    use App\Http\Controllers\Printing\BatchPrintingController;
 
 
 
@@ -66,8 +67,8 @@
         Route::get('/HR/delete_employee/{id}', [EmployeeController::class, 'delete'])->name('HR.delete_employee');
 
         Route::get('/HR/manage_employee/attendance', [EmployeeController::class, 'attendance'])->name('HR.manage_employee.attendance');
-        Route::get('/HR/manage_employee/department', [DepartmentController::class, 'index'])->name('HR.manage_employee.department');
-        Route::post('/departments/store', [DepartmentController::class, 'store'])->name('HR.departments.store');
+        // Route::get('/HR/manage_employee/department', [DepartmentController::class, 'index'])->name('HR.manage_employee.department');
+        // Route::post('/departments/store', [DepartmentController::class, 'store'])->name('HR.departments.store');
 
         /**
          * =====================
@@ -87,9 +88,9 @@
          * Printing Routes
          * =====================
          */
-        Route::get('/HR/payroll/printing', [PrintingController::class, 'index'])->name('HR.payroll.printing');
-        Route::post('/printing/employees', [PrintingController::class, 'getEmployeesByPayroll'])->name('printing.employees');
-        Route::post('/printing/payslip', [PrintingController::class, 'getEmployeePayslip'])->name('printing.payslip');
+        // Route::get('/HR/payroll/printing', [PrintingController::class, 'index'])->name('HR.payroll.printing');
+        // Route::post('/printing/employees', [PrintingController::class, 'getEmployeesByPayroll'])->name('printing.employees');
+        // Route::post('/printing/payslip', [PrintingController::class, 'getEmployeePayslip'])->name('printing.payslip');
         /**
          * =====================
          * Attendance Routes
@@ -143,8 +144,8 @@
         Route::get('/attendance/processdata', [ProcessDTRController::class, 'getProcessedDTR'])->name('attendance.processdata');
         Route::post('/payroll/processdtr', [ProcessDTRController::class, 'store'])->name('processdtr.store');
        Route::resource('payroll/process-dtr', ProcessDTRController::class)->names(['index' => 'payroll.process-dtr.index','store' => 'payroll.process-dtr.store',]); });
-       Route::put('/payroll/process-dtr/update', [PrintingController::class, 'update'])
-       ->name('payroll.process-dtr.update');
+    //    Route::put('/payroll/process-dtr/update', [PrintingController::class, 'update'])
+    //    ->name('payroll.process-dtr.update');
        
 
     //Overtime
@@ -200,6 +201,12 @@
     Route::post('loan/calculate-terms', [LoanController::class, 'calculateLoanTerms'])->name('loan.calculate-terms');
     Route::post('loan/{id}/payment', [LoanController::class, 'recordPayment'])->name('loan.payment');
     
+    //printing 
+
+    route::get('/HR/payslip/batch', [BatchPrintingController::class, 'index'])->name('HR.payslip.batch');
+    Route::get('/HR/payslip/{id}/show', [BatchPrintingController::class, 'show'])->name('batch.show');
+
+
 
     // Authentication routes (login, register, etc.)
     require __DIR__.'/auth.php';
