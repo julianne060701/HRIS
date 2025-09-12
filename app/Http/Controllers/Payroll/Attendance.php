@@ -6,15 +6,52 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use App\Models\Payroll;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class Attendance extends Controller
 {
     /**
+     * Get the active payroll date range
+     */
+    private function getPayrollDateRange()
+    {
+        // First, check for an active payroll record
+        $activePayroll = Payroll::where('status', 'active')->first();
+
+        if ($activePayroll) {
+            return [
+                'start_date' => $activePayroll->from_date->toDateString(),
+                'end_date' => $activePayroll->to_date->toDateString(),
+                'payroll' => $activePayroll
+            ];
+        }
+
+        // If no 'active' payroll is found, fall back to the latest one
+        $latestPayroll = Payroll::orderBy('created_at','desc')->first();
+        if ($latestPayroll) {
+            return [
+                'start_date' => $latestPayroll->from_date->toDateString(),
+                'end_date' => $latestPayroll->to_date->toDateString(),
+                'payroll' => $latestPayroll
+            ];
+        }
+
+        // Default to the current month if no payroll data is found
+        return [
+            'start_date' => Carbon::now()->startOfMonth()->toDateString(),
+            'end_date' => Carbon::now()->endOfMonth()->toDateString(),
+            'payroll' => null
+        ];
+    }
+
+   /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
+<<<<<<< HEAD
         // Fetch payroll data for the dropdown
         $payrollData = DB::table('payrolls')
             ->select('id', 'payroll_code', 'title', 'from_date', 'to_date')
@@ -34,6 +71,18 @@ class Attendance extends Controller
         })->toArray();
 
         return view('hr.attendance.importdtr', compact('payrollData'));
+=======
+        $payrollData = $this->getPayrollDateRange();
+        
+        // Log the dates being used for debugging
+        Log::info("Displaying DTR data for the payroll cutoff: From {$payrollData['start_date']} to {$payrollData['end_date']}");
+
+        return view('hr.attendance.importdtr', [
+            'startDate' => $payrollData['start_date'],
+            'endDate' => $payrollData['end_date'],
+            'activePayroll' => $payrollData['payroll']
+        ]);
+>>>>>>> cec7d66b479c4d2eb88120a9deee87db55396695
     }
 
     /**
@@ -44,7 +93,6 @@ class Attendance extends Controller
         //
     }
     
-
     /**
      * Store a newly created resource in storage.
      */
@@ -122,6 +170,7 @@ class Attendance extends Controller
      * Display the specified resource.
      */
 
+<<<<<<< HEAD
     public function getAttendanceData(Request $request)
     {
         // Get filter dates
@@ -136,6 +185,29 @@ class Attendance extends Controller
             $query->whereBetween('transindate', [$minDate, $maxDate]);
         }
 
+=======
+     public function getAttendanceData(Request $request)
+    {
+        // Get filter dates from request, or use payroll dates as default
+        $minDate = $request->input('minDate');
+        $maxDate = $request->input('maxDate');
+        
+        // If no dates provided, use payroll cutoff dates
+        if (!$minDate || !$maxDate) {
+            $payrollData = $this->getPayrollDateRange();
+            $minDate = $minDate ?: $payrollData['start_date'];
+            $maxDate = $maxDate ?: $payrollData['end_date'];
+        }
+
+        $query = DB::table('attendance')
+            ->select('id','employee_id', 'transindate', 'time_in', 'transoutdate', 'time_out', 'total_hours');
+
+        // Apply date filters
+        if ($minDate && $maxDate) {
+            $query->whereBetween('transindate', [$minDate, $maxDate]);
+        }
+
+>>>>>>> cec7d66b479c4d2eb88120a9deee87db55396695
         $data = $query->get();
 
         return response()->json(['data' => $data]);
@@ -143,9 +215,21 @@ class Attendance extends Controller
 
     public function importFromAttendance(Request $request)
     {
+<<<<<<< HEAD
         $payrollId = $request->input('payroll_id'); // Get payroll ID
         $minDate = $request->input('minDate');
         $maxDate = $request->input('maxDate');
+=======
+        $minDate = $request->input('minDate');
+        $maxDate = $request->input('maxDate');
+        
+        // If no dates provided, use payroll cutoff dates
+        if (!$minDate || !$maxDate) {
+            $payrollData = $this->getPayrollDateRange();
+            $minDate = $minDate ?: $payrollData['start_date'];
+            $maxDate = $maxDate ?: $payrollData['end_date'];
+        }
+>>>>>>> cec7d66b479c4d2eb88120a9deee87db55396695
 
         $query = DB::table('attendance')
             ->select('id', 'employee_id', 'transindate', 'time_in', 'transoutdate', 'time_out');
@@ -156,7 +240,10 @@ class Attendance extends Controller
 
         $attendanceData = $query->get();
 
+<<<<<<< HEAD
         $importedCount = 0;
+=======
+>>>>>>> cec7d66b479c4d2eb88120a9deee87db55396695
         foreach ($attendanceData as $row) {
             $exists = DB::table('dtr')
                 ->where('id', $row->id)
@@ -174,23 +261,52 @@ class Attendance extends Controller
                 DB::table('dtr')->insert([
                     'id'           => $row->id,
                     'employee_id'  => $row->employee_id,
+<<<<<<< HEAD
                     'payroll_id'   => $payrollId, // Associate with payroll
+=======
+>>>>>>> cec7d66b479c4d2eb88120a9deee87db55396695
                     'transindate'  => $row->transindate,
                     'time_in'      => $row->time_in ?? null,
                     'transoutdate' => $row->transoutdate,
                     'time_out'     => $row->time_out ?? null,
                     'total_hours'  => round($totalHours, 2),
+<<<<<<< HEAD
                     'night_diff'   => 0,
                     'created_at'   => now(),
                     'updated_at'   => now(),
                 ]);
                 $importedCount++;
+=======
+                    'night_diff' => 0,
+                    'created_at'   => now(),
+                    'updated_at'   => now(),
+                ]);
+>>>>>>> cec7d66b479c4d2eb88120a9deee87db55396695
             }
         }
 
         return response()->json([
             'status' => 'success',
+<<<<<<< HEAD
             'message' => "Successfully imported {$importedCount} attendance records into DTR for the selected payroll period."
+=======
+            'message' => 'Attendance data successfully imported into DTR with calculated total hours.'
+        ]);
+    }
+
+    /**
+     * Get payroll information for frontend
+     */
+    public function getPayrollInfo(Request $request)
+    {
+        $payrollData = $this->getPayrollDateRange();
+        
+        return response()->json([
+            'start_date' => $payrollData['start_date'],
+            'end_date' => $payrollData['end_date'],
+            'payroll_title' => $payrollData['payroll'] ? $payrollData['payroll']->title : 'Current Month',
+            'payroll_code' => $payrollData['payroll'] ? $payrollData['payroll']->payroll_code : null,
+>>>>>>> cec7d66b479c4d2eb88120a9deee87db55396695
         ]);
     }
 
@@ -217,7 +333,11 @@ class Attendance extends Controller
     {
         //
     }
+<<<<<<< HEAD
     
+=======
+
+>>>>>>> cec7d66b479c4d2eb88120a9deee87db55396695
     public function getProcessedDTR(Request $request)
     {
         try {
@@ -234,19 +354,19 @@ class Attendance extends Controller
                     'employee_dtr.final_time_in',
                     'employee_dtr.final_time_out'
                 );
-    
+
             if ($request->minDate) {
                 $query->whereDate('employee_dtr.date', '>=', $request->minDate);
             }
-    
+
             if ($request->maxDate) {
                 $query->whereDate('employee_dtr.date', '<=', $request->maxDate);
             }
-    
+
             $data = $query->get();
-    
+
             return response()->json(['data' => $data]);
-    
+
         } catch (\Exception $e) {
             return response()->json([
                 'error' => true,
