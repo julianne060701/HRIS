@@ -15,6 +15,7 @@
         <h3 class="card-title">
             @if(isset($activePayroll))
             Payroll Period: {{ $activePayroll->title }} ({{ $activePayroll->payroll_code }})
+            <input type="hidden" id="payrollSelect" value="{{ $activePayroll->id }}">
             @else
             Current Month Period
             @endif
@@ -103,23 +104,23 @@ $(document).ready(function() {
         var selectedOption = $(this).find('option:selected');
         var fromDate = selectedOption.data('from');
         var toDate = selectedOption.data('to');
-        
+
         if (fromDate && toDate) {
             $('#minDate').val(fromDate);
             $('#maxDate').val(toDate);
-            
+
             // Reload table with new date range
             table.ajax.reload();
-            
+
             // Enable buttons when payroll is selected
             $('#importButton, #uploadButton').prop('disabled', false);
         } else {
             // Clear dates and disable buttons if no payroll selected
             $('#minDate, #maxDate').val('');
-            
+
             // Clear table data
             table.clear().draw();
-            
+
             $('#importButton, #uploadButton').prop('disabled', true);
         }
     });

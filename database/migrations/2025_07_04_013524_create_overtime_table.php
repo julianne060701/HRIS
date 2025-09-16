@@ -22,6 +22,10 @@ return new class extends Migration
             $table->float('approved_hours');
             $table->float('ot_reg_holiday_hours');
             $table->float('ot_spec_holiday_hours');
+            $table->float('ot_reg_ho_rdr')->default(0);
+            $table->float('ot_spec_ho_rdr')->default(0);
+            $table->float('ot_night_diff_rdr')->default(0);
+            $table->timestamps();
             
         });
     }

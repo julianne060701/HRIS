@@ -18,6 +18,9 @@ class Overtime extends Model
         'approved_hours',
         'ot_reg_holiday_hours',
         'ot_spec_holiday_hours',
+        'ot_reg_ho_rdr',
+        'ot_spec_ho_rdr',
+        'ot_night_diff_rdr',
     ];
     
 }

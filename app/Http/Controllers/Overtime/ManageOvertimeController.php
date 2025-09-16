@@ -9,7 +9,8 @@ use App\Models\Overtime;
 use App\Models\Holiday;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Log; // For logging during development/debugging
+use Illuminate\Support\Facades\Log; 
+use App\Models\EmployeeSchedule;
 
 class ManageOvertimeController extends Controller
 {
@@ -27,57 +28,41 @@ class ManageOvertimeController extends Controller
      * Approve overtime.
      * When approved, re-calculate all detailed overtime components based on recorded ot_in/ot_out.
      */
-    public function approve(Request $request, $id)
+   public function approve(Request $request, $id)
     {
         $ot = Overtime::findOrFail($id);
 
         DB::beginTransaction();
         try {
-            // Re-parse Carbon instances for ot_in and ot_out from the stored record
-            // It's crucial to create Carbon objects with full date and time context
-            $otDate = Carbon::parse($ot->ot_date);
+            $otDate   = Carbon::parse($ot->ot_date);
             $otInTime = Carbon::parse($otDate->format('Y-m-d') . ' ' . $ot->ot_in);
             $otOutTime = Carbon::parse($otDate->format('Y-m-d') . ' ' . $ot->ot_out);
 
-            Log::debug("Approve - Original otInTime: " . $otInTime->toDateTimeString());
-            Log::debug("Approve - Original otOutTime: " . $otOutTime->toDateTimeString());
-
-            // Handle overtime crossing midnight by adding a day to ot_out if it's earlier than ot_in
-            // This ensures correct duration calculation for overnight shifts
             if ($otOutTime->lt($otInTime)) {
                 $otOutTime->addDay();
-                Log::debug("Approve - otOutTime adjusted for midnight cross: " . $otOutTime->toDateTimeString());
             }
 
-            // Recalculate total_ot_hours based on actual duration, ensuring a positive value
             $calculatedTotalOtHours = round($otInTime->diffInMinutes($otOutTime) / 60, 2);
-            Log::debug("Approve - Calculated total_ot_hours: " . $calculatedTotalOtHours);
 
+            $overtimeDetails = $this->calculateOvertimeDetails($ot->employee_id, $otInTime, $otOutTime);
 
-            // Recalculate all overtime details using the helper function
-            $overtimeDetails = $this->calculateOvertimeDetails($otInTime, $otOutTime);
-
-            $ot->is_approved = true;
-            // When approving, it's reasonable to set approved_hours to the newly calculated total_ot_hours
-            $ot->approved_hours = $calculatedTotalOtHours;
-            // Also update total_ot_hours in case the original calculation was flawed or needed re-validation
-            $ot->total_ot_hours = $calculatedTotalOtHours;
-
-
-            // Update all the computed columns with fresh calculations
-           
-            $ot->ot_reg_holiday_hours = $overtimeDetails['ot_reg_holiday_hours'];
-            $ot->ot_spec_holiday_hours = $overtimeDetails['ot_spec_holiday_hours'];
-    
-
-            $ot->save();
+            $ot->update([
+                'is_approved'          => true,
+                'approved_hours'       => $calculatedTotalOtHours,
+                'total_ot_hours'       => $calculatedTotalOtHours,
+                'ot_reg_holiday_hours' => $overtimeDetails['ot_reg_holiday_hours'],
+                'ot_spec_holiday_hours'=> $overtimeDetails['ot_spec_holiday_hours'],
+                'ot_reg_ho_rdr'        => $overtimeDetails['ot_reg_ho_rdr'],
+                'ot_spec_ho_rdr'       => $overtimeDetails['ot_spec_ho_rdr'],
+                'ot_night_diff_rdr'    => $overtimeDetails['ot_night_diff_rdr'],
+            ]);
 
             DB::commit();
-            return response()->json(['message' => 'Overtime approved successfully and components re-calculated.', 'data' => $ot]);
+            return response()->json(['message' => 'Overtime approved successfully.', 'data' => $ot]);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Error approving and recalculating overtime (ID: {$id}): " . $e->getMessage());
-            return response()->json(['message' => 'Failed to approve and re-calculate overtime.', 'error' => $e->getMessage()], 500);
+            Log::error("Overtime approve error (ID: {$id}): " . $e->getMessage());
+            return response()->json(['message' => 'Approval failed', 'error' => $e->getMessage()], 500);
         }
     }
 
@@ -97,15 +82,12 @@ class ManageOvertimeController extends Controller
     /**
      * Update overtime entry and re-calculate night differential and holiday OT.
      */
-    public function update(Request $request, $id)
+   public function update(Request $request, $id)
     {
         $validator = Validator::make($request->all(), [
             'ot_date' => 'required|date',
-            'ot_in' => 'required|date_format:H:i:s', // Ensure time format is strict
-            'ot_out' => 'required|date_format:H:i:s', // Ensure time format is strict
-            // total_ot_hours is now computed, so not strictly required from request, but good for validation
-            'total_ot_hours' => 'nullable|numeric|min:0', // Must be non-negative if provided
-            'approved_hours' => 'nullable|numeric|min:0'
+            'ot_in'   => 'required|date_format:H:i:s',
+            'ot_out'  => 'required|date_format:H:i:s',
         ]);
 
         if ($validator->fails()) {
@@ -114,54 +96,41 @@ class ManageOvertimeController extends Controller
 
         $ot = Overtime::findOrFail($id);
 
-        // Parse ot_date, ot_in, ot_out into Carbon instances for calculation
-        $otDate = Carbon::parse($request->ot_date);
+        $otDate   = Carbon::parse($request->ot_date);
         $otInTime = Carbon::parse($otDate->format('Y-m-d') . ' ' . $request->ot_in);
         $otOutTime = Carbon::parse($otDate->format('Y-m-d') . ' ' . $request->ot_out);
 
-        Log::debug("Update - Original otInTime: " . $otInTime->toDateTimeString());
-        Log::debug("Update - Original otOutTime: " . $otOutTime->toDateTimeString());
-
-        // Handle overtime crossing midnight
         if ($otOutTime->lt($otInTime)) {
             $otOutTime->addDay();
-            Log::debug("Update - otOutTime adjusted for midnight cross: " . $otOutTime->toDateTimeString());
         }
 
-        // Calculate total_ot_hours based on actual duration.
-        // This is important to ensure consistency, especially if ot_in/ot_out are changed.
         $calculatedTotalOtHours = round($otInTime->diffInMinutes($otOutTime) / 60, 2);
-        Log::debug("Update - Calculated total_ot_hours: " . $calculatedTotalOtHours);
-
-
-        // Call the helper to calculate night differential and holiday overtime components
-        $overtimeDetails = $this->calculateOvertimeDetails($otInTime, $otOutTime);
+        $overtimeDetails = $this->calculateOvertimeDetails($ot->employee_id, $otInTime, $otOutTime);
 
         DB::beginTransaction();
         try {
-            $ot->ot_date = $otDate->toDateString();
-            $ot->ot_in = $request->ot_in;
-            $ot->ot_out = $request->ot_out;
-            $ot->total_ot_hours = $calculatedTotalOtHours; // Use calculated hours
-            // If approved_hours is not provided in request, retain existing. Otherwise, use new.
-            $ot->approved_hours = $request->approved_hours ?? $ot->approved_hours;
-
-            // Store the newly calculated special overtime hours
-            $ot->ot_reg_holiday_hours = $overtimeDetails['ot_reg_holiday_hours'];
-            $ot->ot_spec_holiday_hours = $overtimeDetails['ot_spec_holiday_hours'];
-           
-
-            $ot->save();
+            $ot->update([
+                'ot_date'             => $otDate->toDateString(),
+                'ot_in'               => $request->ot_in,
+                'ot_out'              => $request->ot_out,
+                'total_ot_hours'      => $calculatedTotalOtHours,
+                'approved_hours'      => $request->approved_hours ?? $ot->approved_hours,
+                'ot_reg_holiday_hours'=> $overtimeDetails['ot_reg_holiday_hours'],
+                'ot_spec_holiday_hours'=> $overtimeDetails['ot_spec_holiday_hours'],
+                'ot_reg_ho_rdr'       => $overtimeDetails['ot_reg_ho_rdr'],
+                'ot_spec_ho_rdr'      => $overtimeDetails['ot_spec_ho_rdr'],
+                'ot_rest_day'            => $overtimeDetails['ot_rest_day'],
+                'ot_night_diff_rdr'   => $overtimeDetails['ot_night_diff_rdr'],
+            ]);
 
             DB::commit();
-            return response()->json(['message' => 'Overtime record updated successfully.', 'data' => $ot]);
+            return response()->json(['message' => 'Overtime updated successfully.', 'data' => $ot]);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Error updating overtime record (ID: {$id}): " . $e->getMessage());
-            return response()->json(['message' => 'Failed to update overtime record.', 'error' => $e->getMessage()], 500);
+            Log::error("Overtime update error (ID: {$id}): " . $e->getMessage());
+            return response()->json(['message' => 'Update failed', 'error' => $e->getMessage()], 500);
         }
     }
-
     /**
      * Helper function to calculate night differential and holiday overtime minutes
      * for a given overtime period.
@@ -175,59 +144,60 @@ class ManageOvertimeController extends Controller
      * - 'ot_reg_holiday_nd_hours' (float)
      * - 'ot_spec_holiday_nd_hours' (float)
      */
-    private function calculateOvertimeDetails(Carbon $otInCarbon, Carbon $otOutCarbon): array
+     private function calculateOvertimeDetails($employeeId, Carbon $otInCarbon, Carbon $otOutCarbon): array
     {
-     
         $regHolidayOtMinutes = 0;
         $specHolidayOtMinutes = 0;
-       
+        $regHolidayRdrMinutes = 0;
+        $specHolidayRdrMinutes = 0;
+        $nightDiffRdrMinutes = 0;
 
-
+        $isRestDay = $this->isRestDay($employeeId, $otInCarbon->toDateString());
         $currentMinute = $otInCarbon->copy();
 
-        Log::debug("Starting calculateOvertimeDetails loop from: " . $currentMinute->toDateTimeString() . " to " . $otOutCarbon->toDateTimeString());
-
         while ($currentMinute->lt($otOutCarbon)) {
-            // FIX: Define $currentHour at the beginning of each loop iteration
-            $currentHour = $currentMinute->hour;
+            $minuteDate = $currentMinute->format('Y-m-d');
+            $holiday = Holiday::where('date', $minuteDate)->first();
 
-            // Format the current minute's date to match the holiday table's format (YYYY/MM/DD)
-            $minuteDateFormattedForHoliday = $currentMinute->format('Y/m/d');
+            $isRegularHoliday = ($holiday && $holiday->type === 'REGULAR HOLIDAY');
+            $isSpecialHoliday = ($holiday && $holiday->type === 'SPECIAL NON-WORKING HOLIDAY');
 
-            Log::debug("Checking for holiday on formatted date: " . $minuteDateFormattedForHoliday);
-
-
-            // Check for Holiday on the current minute's date using the corrected format
-            $holidayForMinute = Holiday::where('date', $minuteDateFormattedForHoliday)->first();
-            $isMinuteOnRegularHoliday = ($holidayForMinute && $holidayForMinute->type === 'REGULAR HOLIDAY');
-            $isMinuteOnSpecialHoliday = ($holidayForMinute && $holidayForMinute->type === 'SPECIAL NON-WORKING HOLIDAY');
-
-            // Log holiday check results
-            if ($isMinuteOnRegularHoliday) {
-                Log::debug("HOLIDAY DETECTED (REGULAR) for: " . $currentMinute->toDateTimeString());
-            } elseif ($isMinuteOnSpecialHoliday) {
-                Log::debug("HOLIDAY DETECTED (SPECIAL) for: " . $currentMinute->toDateTimeString());
-            }
-
-            // Accumulate Holiday Overtime Minutes
-            if ($isMinuteOnRegularHoliday) {
+            // Count holiday overtime
+            if ($isRegularHoliday) {
                 $regHolidayOtMinutes++;
-                // Log::debug("Minute on Regular Holiday: " . $currentMinute->toDateTimeString());
-
-            } if ($isMinuteOnSpecialHoliday) {
+                if ($isRestDay) $regHolidayRdrMinutes++;
+            }
+            if ($isSpecialHoliday) {
                 $specHolidayOtMinutes++;
-                // Log::debug("Minute on Special Holiday: " . $currentMinute->toDateTimeString());
+                if ($isRestDay) $specHolidayRdrMinutes++;
             }
 
+            // Night differential (10PM - 6AM)
+            if ($isRestDay && ($currentMinute->hour >= 22 || $currentMinute->hour < 6)) {
+                $nightDiffRdrMinutes++;
+            }
 
             $currentMinute->addMinute();
         }
 
         return [
             'ot_reg_holiday_hours' => round($regHolidayOtMinutes / 60, 2),
-            'ot_spec_holiday_hours' => round($specHolidayOtMinutes / 60, 2),      
+            'ot_spec_holiday_hours'=> round($specHolidayOtMinutes / 60, 2),
+            'ot_reg_ho_rdr'        => round($regHolidayRdrMinutes / 60, 2),
+            'ot_spec_ho_rdr'       => round($specHolidayRdrMinutes / 60, 2),
+            'ot_night_diff_rdr'    => round($nightDiffRdrMinutes / 60, 2),
         ];
     }
+
+    private function isRestDay($employeeId, $date): bool
+    {
+        $schedule = EmployeeSchedule::where('employee_id', $employeeId)
+            ->where('date', $date)
+            ->first();
+
+        return $schedule && strtoupper($schedule->shift_code) === 'RDR';
+    }
+
 
 
     /**
@@ -300,7 +270,8 @@ class ManageOvertimeController extends Controller
         Log::info('Calculated total overtime hours: ' . json_encode(["total_ot_hours" => $totalOtHours]));
 
         // Calculate all detailed overtime components
-        $overtimeDetails = $this->calculateOvertimeDetails($otInCarbon, $otOutCarbon);
+        $overtimeDetails = $this->calculateOvertimeDetails($employeeId, $otInCarbon, $otOutCarbon);
+
 
         DB::beginTransaction();
         try {
@@ -312,7 +283,6 @@ class ManageOvertimeController extends Controller
                 'total_ot_hours' => $totalOtHours,
                 'is_approved' => false, // New overtime is typically not approved initially
                 'approved_hours' => 0,
-                // Store the newly calculated special overtime hours
                 'ot_night_diff_hours' => $overtimeDetails['ot_night_diff_hours'],
                 'ot_reg_holiday_hours' => $overtimeDetails['ot_reg_holiday_hours'],
                 'ot_spec_holiday_hours' => $overtimeDetails['ot_spec_holiday_hours'],
