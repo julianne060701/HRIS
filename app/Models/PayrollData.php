@@ -9,32 +9,41 @@ class PayrollData extends Model
 {
     use HasFactory;
 
-    protected $table = 'payrolldata'; // Explicitly define the table name
+    protected $table = 'payrolldata';
 
     protected $fillable = [
-        'payroll_id', // Added for linking to the Payroll period
+        'payroll_id',
         'employee_id',
         'payroll_start_date',
         'payroll_end_date',
         'gross_pay',
         'basic_hours_pay',
         'night_differential_pay',
+        'night_differential_pay_reg', // New
+        'night_differential_pay_spec', // New
         'regular_holiday_pay',
         'special_holiday_pay',
         'overtime_pay',
+        'ot_reg_holiday_pay', // New
+        'ot_spec_holiday_pay', // New
+        'ot_night_diff_rdr_pay', // New
         'late_deduction',
         'undertime_deduction',
+        'rest_day_pay', // New
+        'rest_reg_pay', // New
+        'rest_spec_pay', // New
+        'rest_ot_pay', // New
         'sss_contribution',
         'philhealth_contribution',
         'pagibig_contribution',
         'tax_withheld',
+        'loan_deduction', // New
         'other_deductions',
         'total_deductions',
         'net_pay',
-        'processed_by', // Added for tracking who processed the payroll
+        'processed_by',
     ];
 
-    // If 'employee_id' is a foreign key, you might want to define a relationship
     public function employee()
     {
         return $this->belongsTo(Employee::class, 'employee_id', 'employee_id');
@@ -47,6 +56,6 @@ class PayrollData extends Model
 
     public function processor()
     {
-        return $this->belongsTo(User::class, 'processed_by'); // Assuming 'users' table for processors
+        return $this->belongsTo(User::class, 'processed_by');
     }
 }

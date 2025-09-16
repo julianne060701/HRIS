@@ -233,27 +233,34 @@ body {
             <div class="payslip-section">
                 <div class="section-title">WORK DONE</div>
                 <ul class="payslip-list">
-                    <li><span>BASIC PAY</span> <span>11D {{ number_format($dailyrate * 11, 2) }}</span></li>
-                    <li><span>REST DAY</span> <span></span></li>
-                    <li><span>LEG HOL</span> <span></span></li>
-                    <li><span>RD</span> <span></span></li>
-                    <li><span>LEG HOL + RD</span> <span></span></li>
-                    <li><span>SPCL HOL + RD</span> <span></span></li>
-                    <li><span>OT REG</span> <span></span></li>
-                    <li><span>OT RD</span> <span></span></li>
-                    <li><span>OT LEG HOL</span> <span></span></li>
-                    <li><span>OT SPCL HOL</span> <span></span></li>
-                    <li><span>OT LEG HOL + RD</span> <span></span></li>
-                    <li><span>OT SPCL HOL + RD</span> <span></span></li>
-                    <li><span>NIGHT PREMIUM</span> <span></span></li>
-                    <li><span>ND LEGAL</span> <span>-</span></li>
-                    <li><span>ND SPECIAL</span> <span></span></li>
-                    <li><span>ND+OT_RD</span> <span>0.00</span></li>
-                    <li><span>UNDERTIME</span> <span></span></li>
-                    <li><span>TARDY</span>
-                        <span>({{ number_format($payslip->late_deduction + $payslip->undertime_deduction, 2) }})</span>
+                    {{-- Use data from the payslip object. Handle cases where the value might not be available. --}}
+                    <li><span>BASIC PAY</span> <span>{{ number_format($payslip->basic_hours_pay, 2) }}</span></li>
+                    <li><span>REST DAY</span> <span>{{ number_format($payslip->rest_day_pay, 2) }}</span></li>
+                    <li><span>LEG HOL</span> <span>{{ number_format($payslip->regular_holiday_pay, 2) }}</span></li>
+                    <li><span>SPCL HOL</span> <span>{{ number_format($payslip->special_holiday_pay, 2) }}</span></li>
+                    <li><span>LEG HOL + RD</span> <span>{{ number_format($payslip->rest_reg_pay, 2) }}</span></li>
+                    <li><span>SPCL HOL + RD</span> <span>{{ number_format($payslip->rest_spec_pay, 2) }}</span></li>
+                    <li><span>OT REG</span> <span>{{ number_format($payslip->overtime_pay, 2) }}</span></li>
+                    <li><span>OT RD</span> <span>{{ number_format($payslip->rest_ot_pay, 2) }}</span></li>
+                    <li><span>OT LEG HOL</span> <span>{{ number_format($payslip->ot_reg_holiday_pay, 2) }}</span></li>
+                    <li><span>OT SPCL HOL</span> <span>{{ number_format($payslip->ot_spec_holiday_pay, 2) }}</span></li>
+                    <li><span>OT LEG HOL + RD</span>
+                        <span>{{ number_format($payslip->ot_rdr_reg_holiday_pay, 2) }}</span>
                     </li>
-                    <li><span>ABSENT</span> <span></span></li>
+                    <li><span>OT SPCL HOL + RD</span>
+                        <span>{{ number_format($payslip->ot_rdr_spec_holiday_pay, 2) }}</span>
+                    </li>
+                    <li><span>NIGHT PREMIUM</span> <span>{{ number_format($payslip->night_differential_pay, 2) }}</span>
+                    </li>
+                    <li><span>ND LEGAL</span> <span>{{ number_format($payslip->night_differential_pay_reg, 2) }}</span>
+                    </li>
+                    <li><span>ND SPECIAL</span>
+                        <span>{{ number_format($payslip->night_differential_pay_spec, 2) }}</span>
+                    </li>
+                    <li><span>ND+OT_RD</span> <span>{{ number_format($payslip->ot_night_diff_rdr_pay, 2) }}</span></li>
+                    <li><span>UNDERTIME</span> <span>({{ number_format($payslip->undertime_deduction, 2) }})</span></li>
+                    <li><span>TARDY</span> <span>({{ number_format($payslip->late_deduction, 2) }})</span></li>
+                    <li><span>ABSENT</span> <span>({{ number_format($payslip->absent_deduction, 2) }})</span></li>
                 </ul>
                 <div style="border-top: 1px solid #000; margin-top: 5px; padding-top: 5px; font-weight: bold;">
                     <div style="text-align: right;">{{ number_format($payslip->gross_pay, 2) }}</div>

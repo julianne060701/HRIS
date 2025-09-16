@@ -60,10 +60,10 @@ class ProcessDTRController extends Controller
                     ->whereRaw('DATE(attendance.transindate) = employee_schedules.date');
             })
             ->leftJoin('leave_types', 'employee_schedules.leave_type_id', '=', 'leave_types.id')
-            
+
             // 4. Use the new $startDate and $endDate variables for the date range filter.
             ->whereBetween('employee_schedules.date', [$startDate, $endDate])
-            
+
             ->orderByDesc('employee_schedules.date')
             ->get();
 
@@ -102,7 +102,7 @@ class ProcessDTRController extends Controller
 
         $totalNightDiffMinutes = 0;
 
-        // Night differential window: 10 PM to 6 AM (next day)
+        
         $ndWindowStartHour = 22; // 10 PM
         $ndWindowEndHour = 6;    // 6 AM
 
@@ -336,26 +336,27 @@ class ProcessDTRController extends Controller
                 $nightDiffSpecMinutes = 0;
                 $accumulatedRegHolidayHours = 0.0;
                 $accumulatedSpecHolidayHours = 0.0;
-                $actualTimeIn = null;
-                $actualTimeOut = null;
+                // Keep actual time in/out values to show they were present for a partial day
+                // $actualTimeIn = null; 
+                // $actualTimeOut = null; 
+                // Removed the lines that set time_in/out to null. This is the key change.
 
 
                 Log::info("Employee is on leave (ID: {$leaveTypeId}, Name: " . ($shiftCodeToStore ?? 'N/A') . "). Setting total_hours to leave type's deduction hours: {$totalHours}.");
 
+            }
+            // The previous 'else' block is now removed, allowing the time-based calculations to run regardless of a leave type.
+
+            $hourFraction = 1 / 60.0;
+
+            // Calculate Lateness with Grace Period
+            if (trim(strtoupper($shiftCodeFromForm)) === 'RDR') {
+                $isLate = false;
+                $lateMinutes = 0;
+                $isUndertime = false;
+                $undertimeMinutes = 0;
+                Log::info("Exempting Employee ID {$employeeId} from late/undertime due to RDR shift code.");
             } else {
-
-                $hourFraction = 1 / 60.0;
-
-                // Calculate Lateness with Grace Period
-
-
-                if (trim(strtoupper($shiftCodeFromForm)) === 'RDR') {
-                    $isLate = false;
-                    $lateMinutes = 0;
-                    $isUndertime = false;
-                    $undertimeMinutes = 0;
-                    Log::info("Exempting Employee ID {$employeeId} from late/undertime due to RDR shift code.");
-                    } else {
                 if ($actualTimeInCarbon && $expectedTimeInCarbon) {
                     $expectedTimeInWithGrace = $expectedTimeInCarbon->copy()->addMinutes($lateGracePeriodMinutes);
 
@@ -389,124 +390,111 @@ class ProcessDTRController extends Controller
                         Log::error("Error during undertime calculation: " . $e->getMessage());
                     }
                 }
-                    }
-                // --- Calculate total_hours based on effective time (actual bounded by expected) and deducting breaks ---
-                $effectiveTimeIn = null;
-                $effectiveTimeOut = null;
-                $breakMinutes = 0;
+            }
 
-                // Determine the effective time in: Later of actual or expected
-                if ($actualTimeInCarbon && $expectedTimeInCarbon) {
-                    $effectiveTimeIn = $actualTimeInCarbon->max($expectedTimeInCarbon);
-                } else {
-                    // If actual time in is missing, but expected is there, consider effective time in as expected (employee might be absent from this time)
-                    // Or if expected is missing, but actual is there, consider effective time in as actual
-                    $effectiveTimeIn = $actualTimeInCarbon ?? $expectedTimeInCarbon;
+            // --- Calculate total_hours based on effective time (actual bounded by expected) and deducting breaks ---
+            $effectiveTimeIn = null;
+            $effectiveTimeOut = null;
+            $breakMinutes = 0;
+
+            // Determine the effective time in: Later of actual or expected
+            if ($actualTimeInCarbon && $expectedTimeInCarbon) {
+                $effectiveTimeIn = $actualTimeInCarbon->max($expectedTimeInCarbon);
+            } else {
+                $effectiveTimeIn = $actualTimeInCarbon ?? $expectedTimeInCarbon;
+            }
+
+            // Determine the effective time out: Earlier of actual or expected
+            if ($actualTimeOutCarbon && $expectedTimeOutCarbon) {
+                $effectiveTimeOut = $actualTimeOutCarbon->min($expectedTimeOutCarbon);
+            } else {
+                $effectiveTimeOut = $actualTimeOutCarbon ?? $expectedTimeOutCarbon;
+            }
+
+
+            if ($effectiveTimeIn && $effectiveTimeOut && $effectiveTimeOut->gt($effectiveTimeIn)) {
+                $totalMinutesWorked = $effectiveTimeOut->diffInMinutes($effectiveTimeIn);
+                $totalMinutesWorked = abs($totalMinutesWorked); // Ensure positive
+            } else {
+                $totalMinutesWorked = 0;
+            }
+
+            Log::info("DEBUG: totalMinutesWorked (initial gross, after effective times): {$totalMinutesWorked}");
+
+            // --- Deduct break minutes if applicable and within the effective range ---
+            if ($expectedBreakIn && $expectedBreakOut) {
+                $breakInCarbon = Carbon::parse($baseDate->toDateString() . ' ' . $expectedBreakIn);
+                $breakOutCarbon = Carbon::parse($baseDate->toDateString() . ' ' . $expectedBreakOut);
+
+                // Adjust breakOutCarbon if break spans midnight (e.g., 23:00 to 00:00 next day)
+                if ($breakOutCarbon->lt($breakInCarbon)) {
+                    $breakOutCarbon->addDay();
                 }
 
-                // Determine the effective time out: Earlier of actual or expected
-                if ($actualTimeOutCarbon && $expectedTimeOutCarbon) {
-                    $effectiveTimeOut = $actualTimeOutCarbon->min($expectedTimeOutCarbon);
-                } else {
-                    // If actual time out is missing, but expected is there, consider effective time out as expected
-                    // Or if expected is missing, but actual is there, consider effective time out as actual
-                    $effectiveTimeOut = $actualTimeOutCarbon ?? $expectedTimeOutCarbon;
+                // Calculate overlap of the expected break with the actual effective worked duration
+                $overlapStart = $effectiveTimeIn->max($breakInCarbon);
+                $overlapEnd = $effectiveTimeOut->min($breakOutCarbon);
+
+                if ($overlapStart->lt($overlapEnd)) {
+                    $breakMinutes = abs($overlapEnd->diffInMinutes($overlapStart));
                 }
+                Log::info("DEBUG: Calculated breakMinutes to deduct: {$breakMinutes}");
+            }
+
+            $totalMinutesWorked = max(0, $totalMinutesWorked - $breakMinutes); // Deduct break, ensure non-negative
+
+            Log::info("DEBUG: totalMinutesWorked (after break deduction and max(0,...)): {$totalMinutesWorked}");
+
+            // Add the worked hours to the total. If it's a full leave day, worked hours will be 0.
+            $totalHours = ($leaveTypeId ? $totalHours : 0) + round($totalMinutesWorked / 60, 2);
+
+            Log::info("Calculated totalHours (after final processing and made positive): {$totalHours}");
 
 
-                if ($effectiveTimeIn && $effectiveTimeOut) {
-                    // Ensure effectiveTimeOut is not before effectiveTimeIn for duration calculation
-                    if ($effectiveTimeOut->lt($effectiveTimeIn)) {
-                        $totalMinutesWorked = 0;
-                        Log::warning("Logic error: Effective Time Out ({$effectiveTimeOut->format('Y-m-d H:i:s')}) is before Effective Time In ({$effectiveTimeIn->format('Y-m-d H:i:s')}). Setting totalMinutesWorked to 0.");
+            $totalNightDiffEffectiveMinutes = $this->calculateNightDifferentialMinutes($effectiveTimeIn, $effectiveTimeOut);
+            Log::info("DEBUG: totalNightDiffEffectiveMinutes (from helper): {$totalNightDiffEffectiveMinutes}");
+
+
+            $accumulatedRegHolidayHours = 0.0;
+            $accumulatedSpecHolidayHours = 0.0;
+            $nightDiffRegMinutes = 0;
+            $nightDiffSpecMinutes = 0;
+            $nightDiffNormalMinutes = 0;
+
+            // Recalculate holiday hours and holiday night differential minutes based on effective time in/out
+            if ($effectiveTimeIn && $effectiveTimeOut) { // Use effective times for holiday distribution of ND
+                $currentMinute = $effectiveTimeIn->copy();
+                $ndWindowStartHour = 22; // 10 PM
+                $ndWindowEndHour = 6;    // 6 AM
+
+                while ($currentMinute->lt($effectiveTimeOut)) {
+                    $minuteDate = $currentMinute->toDateString();
+                    $holidayForMinute = Holiday::where('date', $minuteDate)->first();
+                    $isMinuteOnRegularHoliday = ($holidayForMinute && $holidayForMinute->type === 'REGULAR HOLIDAY');
+                    $isMinuteOnSpecialHoliday = ($holidayForMinute && $holidayForMinute->type === 'SPECIAL NON-WORKING HOLIDAY');
+
+                    $currentHour = $currentMinute->hour;
+                    $isWithinNDWindow = ($currentHour >= $ndWindowStartHour || $currentHour < $ndWindowEndHour);
+
+                    if ($isMinuteOnRegularHoliday) {
+                        $accumulatedRegHolidayHours += $hourFraction;
+                        if ($isWithinNDWindow) {
+                            $nightDiffRegMinutes++;
+                        }
+                    } elseif ($isMinuteOnSpecialHoliday) {
+                        $accumulatedSpecHolidayHours += $hourFraction;
+                        if ($isWithinNDWindow) {
+                            $nightDiffSpecMinutes++;
+                        }
                     } else {
-                        $totalMinutesWorked = $effectiveTimeOut->diffInMinutes($effectiveTimeIn);
-                        $totalMinutesWorked = abs($totalMinutesWorked); // Ensure positive
-                    }
-
-                    Log::info("DEBUG: totalMinutesWorked (initial gross, after effective times): {$totalMinutesWorked}");
-
-                    // --- Deduct break minutes if applicable and within the effective range ---
-                   
-
-                    if ($expectedBreakIn && $expectedBreakOut) {
-                        $breakInCarbon = Carbon::parse($baseDate->toDateString() . ' ' . $expectedBreakIn);
-                        $breakOutCarbon = Carbon::parse($baseDate->toDateString() . ' ' . $expectedBreakOut);
-
-                        // Adjust breakOutCarbon if break spans midnight (e.g., 23:00 to 00:00 next day)
-                        if ($breakOutCarbon->lt($breakInCarbon)) {
-                            $breakOutCarbon->addDay();
+                        // If not a holiday, and within ND window, it's normal night differential
+                        if ($isWithinNDWindow) {
+                            $nightDiffNormalMinutes++;
                         }
-
-                        // Calculate overlap of the expected break with the actual effective worked duration
-                        $overlapStart = $effectiveTimeIn->max($breakInCarbon);
-                        $overlapEnd = $effectiveTimeOut->min($breakOutCarbon);
-
-                        if ($overlapStart->lt($overlapEnd)) {
-                            $breakMinutes = abs($overlapEnd->diffInMinutes($overlapStart));;
-                        }
-                        Log::info("DEBUG: Calculated breakMinutes to deduct: {$breakMinutes}");
                     }
-
-                    $totalMinutesWorked = max(0, $totalMinutesWorked - $breakMinutes); // Deduct break, ensure non-negative
-
-                    Log::info("DEBUG: totalMinutesWorked (after break deduction and max(0,...)): {$totalMinutesWorked}");
-
-                } else {
-                    $totalMinutesWorked = 0;
-                    Log::warning("DEBUG: Missing effectiveTimeIn or effectiveTimeOut. Setting totalMinutesWorked to 0.");
+                    $currentMinute->addMinute();
                 }
-                $totalHours = round($totalMinutesWorked / 60, 2);
-                $totalHours = abs($totalHours);
-
-                Log::info("Calculated totalHours (after final processing and made positive): {$totalHours}");
-
-
-                $totalNightDiffEffectiveMinutes = $this->calculateNightDifferentialMinutes($effectiveTimeIn, $effectiveTimeOut);
-                Log::info("DEBUG: totalNightDiffEffectiveMinutes (from helper): {$totalNightDiffEffectiveMinutes}");
-
-
-                $accumulatedRegHolidayHours = 0.0;
-                $accumulatedSpecHolidayHours = 0.0;
-                $nightDiffRegMinutes = 0; // Reset for recalculation based on actual time within holidays
-                $nightDiffSpecMinutes = 0; // Reset for recalculation based on actual time within holidays
-                $nightDiffNormalMinutes = 0; // Initialize normal night diff
-
-                // Recalculate holiday hours and holiday night differential minutes based on effective time in/out
-                if ($effectiveTimeIn && $effectiveTimeOut) { // Use effective times for holiday distribution of ND
-                    $currentMinute = $effectiveTimeIn->copy();
-                    $ndWindowStartHour = 22; // 10 PM
-                    $ndWindowEndHour = 6;    // 6 AM
-
-                    while ($currentMinute->lt($effectiveTimeOut)) {
-                        $minuteDate = $currentMinute->toDateString();
-                        $holidayForMinute = Holiday::where('date', $minuteDate)->first();
-                        $isMinuteOnRegularHoliday = ($holidayForMinute && $holidayForMinute->type === 'REGULAR HOLIDAY');
-                        $isMinuteOnSpecialHoliday = ($holidayForMinute && $holidayForMinute->type === 'SPECIAL NON-WORKING HOLIDAY');
-
-                        $currentHour = $currentMinute->hour;
-                        $isWithinNDWindow = ($currentHour >= $ndWindowStartHour || $currentHour < $ndWindowEndHour);
-
-                        if ($isMinuteOnRegularHoliday) {
-                            $accumulatedRegHolidayHours += $hourFraction;
-                            if ($isWithinNDWindow) {
-                                $nightDiffRegMinutes++;
-                            }
-                        } elseif ($isMinuteOnSpecialHoliday) {
-                            $accumulatedSpecHolidayHours += $hourFraction;
-                            if ($isWithinNDWindow) {
-                                $nightDiffSpecMinutes++;
-                            }
-                        } else {
-                            // If not a holiday, and within ND window, it's normal night differential
-                            if ($isWithinNDWindow) {
-                                $nightDiffNormalMinutes++;
-                            }
-                        }
-                        $currentMinute->addMinute();
-                    }
-                }
-            } // End of else (not on leave) condition
+            }
 
             // --- Ensure all magnitude-based values are non-negative before saving ---
             $lateMinutes = abs($lateMinutes);
@@ -604,7 +592,7 @@ class ProcessDTRController extends Controller
             'time_in' => 'nullable|date_format:H:i',
             'time_out' => 'nullable|date_format:H:i',
         ]);
-    
+
         DB::table('attendance')
             ->where('employee_id', $id)
             ->whereDate('transindate', $request->date)
@@ -613,11 +601,11 @@ class ProcessDTRController extends Controller
                 'time_out' => $request->time_out ? Carbon::parse($request->date.' '.$request->time_out) : null,
                 'updated_at' => now(),
             ]);
-    
+
         return redirect()->route('payroll.process-dtr.index')
                          ->with('success', 'Actual Time updated successfully!');
     }
-    
+
 
     /**
      * Remove the specified resource from storage.
