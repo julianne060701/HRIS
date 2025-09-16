@@ -32,10 +32,10 @@
                     $config = [
                         'order' => [[2, 'desc']], // Order by date descending
                         'columns' => array_fill(0, count($heads), ['orderable' => true]),
-                        'paging' => true,       // Disable pagination
+                        'paging' => true,       // Keep pagination enabled
                         'info' => false,         // Disable info text (showing 1 to X of Y entries)
                         'searching' => true,     // Keep search enabled if desired
-                        'pageLength' => 10,      // Show all entries. -1 means no limit.
+                        'pageLength' => 10,      // Default page size
                         'responsive' => true,    // Make table responsive
                     ];
                 @endphp
@@ -89,6 +89,7 @@
                     @endforelse
                 </x-adminlte-datatable>
 
+                <input type="hidden" name="process_all" value="1">
                 <button type="submit" class="btn btn-primary mt-3">Process DTRs</button>
             </form>
         </div>

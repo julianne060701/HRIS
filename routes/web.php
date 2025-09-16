@@ -63,8 +63,19 @@
 
         Route::get('/hr/employee/{id}/edit', [EmployeeController::class, 'edit'])->name('HR.manage_employee.edit_employee');
         Route::put('/hr/employee/{id}', [EmployeeController::class, 'update'])->name('HR.update_employee');
-        Route::get('/employee/{id}', [EmployeeController::class, 'show']);
-        Route::get('/HR/delete_employee/{id}', [EmployeeController::class, 'delete'])->name('HR.delete_employee');
+        Route::get('/employee/{id}', [EmployeeController::class, 'show'])->name('employee.show');
+        Route::get('/test-employee/{id}', function($id) {
+            return response()->json(['test' => 'success', 'id' => $id]);
+        });
+        
+        Route::get('/debug-employees', function() {
+            $employees = App\Models\Employee::select('id', 'employee_id', 'first_name', 'last_name')->get();
+            return response()->json([
+                'count' => $employees->count(),
+                'employees' => $employees->toArray()
+            ]);
+        });
+        Route::delete('/HR/delete_employee/{id}', [EmployeeController::class, 'destroy'])->name('HR.delete_employee');
 
         Route::get('/HR/manage_employee/attendance', [EmployeeController::class, 'attendance'])->name('HR.manage_employee.attendance');
         // Route::get('/HR/manage_employee/department', [DepartmentController::class, 'index'])->name('HR.manage_employee.department');
@@ -103,6 +114,10 @@
         Route::prefix('HR/payroll')->name('HR.payroll.')->group(function () {
             Route::get('/generate', [GenerateController::class, 'index'])->name('generate');
             Route::get('/add_payroll', [AddPayrollController::class, 'index'])->name('add_payroll');
+            Route::get('/edit/{id}', [AddPayrollController::class, 'edit'])->name('edit');
+            Route::post('/update/{id}', [AddPayrollController::class, 'update'])->name('update');
+            Route::delete('/delete/{id}', [AddPayrollController::class, 'destroy'])->name('delete');
+            Route::get('/test-delete/{id}', [AddPayrollController::class, 'testDelete'])->name('test-delete');
         });
 
         Route::post('/HR/payroll/store', [AddPayrollController::class, 'store'])->name('add-payroll.store');
@@ -229,6 +244,7 @@
     //printing 
 
     route::get('/HR/payslip/batch', [BatchPrintingController::class, 'index'])->name('HR.payslip.batch');
+    Route::get('/HR/payslip/batch/print', [BatchPrintingController::class, 'batchPrint'])->name('HR.payslip.batch.print');
     Route::get('/HR/payslip/{id}/show', [BatchPrintingController::class, 'show'])->name('batch.show');
 
 

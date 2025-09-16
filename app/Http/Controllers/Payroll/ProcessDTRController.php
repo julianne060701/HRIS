@@ -165,18 +165,78 @@ class ProcessDTRController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'dtrs.*.employee_id' => 'required|exists:employees,employee_id',
-            'dtrs.*.date' => 'required|date',
-            'dtrs.*.time_in' => 'nullable|date_format:H:i:s',
-            'dtrs.*.time_out' => 'nullable|date_format:H:i:s',
-            'dtrs.*.shift_code' => 'nullable|string|max:20',
-            'dtrs.*.xptd_time_in' => 'nullable|date_format:H:i:s', // These are from employee_schedules table
-            'dtrs.*.xptd_time_out' => 'nullable|date_format:H:i:s',// These are from employee_schedules table
-            'dtrs.*.leave_type_id' => 'nullable|integer|exists:leave_types,id',
-        ]);
+        // If process_all is set, rebuild the DTR list server-side for the entire cutoff range
+        if ($request->boolean('process_all')) {
+            $latestPayroll = Payroll::orderBy('created_at', 'desc')->first();
+            if ($latestPayroll) {
+                $startDate = $latestPayroll->from_date;
+                $endDate = $latestPayroll->to_date;
+            } else {
+                $startDate = Carbon::now()->startOfMonth()->toDateString();
+                $endDate = Carbon::now()->endOfMonth()->toDateString();
+            }
 
-        $dtrs = $request->input('dtrs', []);
+            $rows = DB::table('employee_schedules')
+                ->select(
+                    'employee_schedules.employee_id',
+                    'employee_schedules.shift_code',
+                    'employee_schedules.date',
+                    'schedule.xptd_time_in AS plotted_time_in',
+                    'schedule.xptd_time_out AS plotted_time_out',
+                    'attendance.time_in AS actual_time_in',
+                    'attendance.time_out AS actual_time_out',
+                    'employee_schedules.leave_type_id'
+                )
+                ->leftJoin('schedule', function ($join) {
+                    $join->on(DB::raw('TRIM(employee_schedules.shift_code)'), '=', DB::raw('TRIM(schedule.shift_code)'));
+                })
+                ->leftJoin('attendance', function ($join) {
+                    $join->on('employee_schedules.employee_id', '=', 'attendance.employee_id')
+                        ->whereRaw('DATE(attendance.transindate) = employee_schedules.date');
+                })
+                ->whereBetween('employee_schedules.date', [$startDate, $endDate])
+                ->orderByDesc('employee_schedules.date')
+                ->get();
+
+            $dtrs = [];
+            foreach ($rows as $index => $row) {
+                $dtrs[$index] = [
+                    'employee_id' => $row->employee_id,
+                    'date' => $row->date,
+                    'shift_code' => $row->shift_code,
+                    'xptd_time_in' => $row->plotted_time_in ? Carbon::parse($row->date . ' ' . $row->plotted_time_in)->format('H:i:s') : null,
+                    'xptd_time_out' => $row->plotted_time_out ? Carbon::parse($row->date . ' ' . $row->plotted_time_out)->format('H:i:s') : null,
+                    'time_in' => $row->actual_time_in ? Carbon::parse($row->actual_time_in)->format('H:i:s') : null,
+                    'time_out' => $row->actual_time_out ? Carbon::parse($row->actual_time_out)->format('H:i:s') : null,
+                    'leave_type_id' => $row->leave_type_id,
+                ];
+            }
+
+            // Validate the rebuilt dataset
+            Validator::make(['dtrs' => $dtrs], [
+                'dtrs.*.employee_id' => 'required|exists:employees,employee_id',
+                'dtrs.*.date' => 'required|date',
+                'dtrs.*.time_in' => 'nullable|date_format:H:i:s',
+                'dtrs.*.time_out' => 'nullable|date_format:H:i:s',
+                'dtrs.*.shift_code' => 'nullable|string|max:20',
+                'dtrs.*.xptd_time_in' => 'nullable|date_format:H:i:s',
+                'dtrs.*.xptd_time_out' => 'nullable|date_format:H:i:s',
+                'dtrs.*.leave_type_id' => 'nullable|integer|exists:leave_types,id',
+            ])->validate();
+        } else {
+            $validated = $request->validate([
+                'dtrs.*.employee_id' => 'required|exists:employees,employee_id',
+                'dtrs.*.date' => 'required|date',
+                'dtrs.*.time_in' => 'nullable|date_format:H:i:s',
+                'dtrs.*.time_out' => 'nullable|date_format:H:i:s',
+                'dtrs.*.shift_code' => 'nullable|string|max:20',
+                'dtrs.*.xptd_time_in' => 'nullable|date_format:H:i:s', // These are from employee_schedules table
+                'dtrs.*.xptd_time_out' => 'nullable|date_format:H:i:s',// These are from employee_schedules table
+                'dtrs.*.leave_type_id' => 'nullable|integer|exists:leave_types,id',
+            ]);
+
+            $dtrs = $request->input('dtrs', []);
+        }
 
         // Define the grace period in minutes
         $lateGracePeriodMinutes = 1;

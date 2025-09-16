@@ -16,17 +16,30 @@ class BatchPrintingController extends Controller
      */
     public function index(Request $request)
 {
-    Log::info('Attempting to retrieve active payroll for batch printing.');
+    Log::info('Attempting to retrieve payroll for batch printing.');
 
-    $activePayroll = Payroll::where('status', 'Processed')->orderBy('id', 'desc')->first();
+    // Get all payrolls for dropdown
+    $allPayrolls = Payroll::orderBy('id', 'desc')->get();
 
-    if (!$activePayroll) {
+    // Get selected payroll ID from request
+    $selectedPayrollId = $request->input('payroll_id');
+    
+    // If no payroll selected, get the latest processed payroll
+    if (!$selectedPayrollId) {
+        $payroll = Payroll::where('status', 'Processed')->orderBy('id', 'desc')->first();
+    } else {
+        $payroll = Payroll::find($selectedPayrollId);
+    }
+
+    if (!$payroll) {
         return view('HR.payslip.batch', [
             'payroll' => null,
             'payslips' => collect(),
-            'message' => 'No active payroll period found.',
+            'message' => 'No payroll period found.',
             'departments' => collect(),
             'selectedDepartment' => null,
+            'allPayrolls' => $allPayrolls,
+            'selectedPayrollId' => $selectedPayrollId,
         ]);
     }
 
@@ -35,7 +48,7 @@ class BatchPrintingController extends Controller
 
     // Load payslips
     $payslipsQuery = PayrollData::with('employee')
-        ->where('payroll_id', $activePayroll->id);
+        ->where('payroll_id', $payroll->id);
 
     // Apply filter if department is selected
     $selectedDepartment = $request->input('department');
@@ -48,11 +61,13 @@ class BatchPrintingController extends Controller
     $payslips = $payslipsQuery->get();
 
     return view('HR.payslip.batch', [
-        'payroll' => $activePayroll,
+        'payroll' => $payroll,
         'payslips' => $payslips,
         'message' => null,
         'departments' => $departments,
         'selectedDepartment' => $selectedDepartment,
+        'allPayrolls' => $allPayrolls,
+        'selectedPayrollId' => $selectedPayrollId,
     ]);
 }
 
@@ -83,6 +98,52 @@ class BatchPrintingController extends Controller
             'dailyrate' => $dailyrate,
             'hourlyrate' => $hourlyrate,
             'employee' => $employee,
+        ]);
+    }
+
+    /**
+     * Display all payslips for batch printing with two payslips per page layout
+     */
+    public function batchPrint(Request $request)
+    {
+        Log::info('Attempting to retrieve payslips for batch printing.');
+
+        // Get selected payroll ID from request
+        $selectedPayrollId = $request->input('payroll_id');
+        
+        // If no payroll selected, get the latest processed payroll
+        if (!$selectedPayrollId) {
+            $payroll = Payroll::where('status', 'Processed')->orderBy('id', 'desc')->first();
+        } else {
+            $payroll = Payroll::find($selectedPayrollId);
+        }
+
+        if (!$payroll) {
+            return view('HR.payslip.batch_print', [
+                'payroll' => null,
+                'payslips' => collect(),
+                'message' => 'No payroll period found.',
+            ]);
+        }
+
+        // Load payslips
+        $payslipsQuery = PayrollData::with('employee')
+            ->where('payroll_id', $payroll->id);
+
+        // Apply filter if department is selected
+        $selectedDepartment = $request->input('department');
+        if (!empty($selectedDepartment)) {
+            $payslipsQuery->whereHas('employee', function ($query) use ($selectedDepartment) {
+                $query->where('department', $selectedDepartment);
+            });
+        }
+
+        $payslips = $payslipsQuery->get();
+
+        return view('HR.payslip.batch_print', [
+            'payroll' => $payroll,
+            'payslips' => $payslips,
+            'message' => null,
         ]);
     }
 

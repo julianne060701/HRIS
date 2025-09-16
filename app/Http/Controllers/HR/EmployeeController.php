@@ -14,6 +14,10 @@ class EmployeeController extends Controller
     $employees = Employee::all(); 
     $data = [];
     
+    // Debug: Log employee count and IDs
+    \Log::info('Employee count: ' . $employees->count());
+    \Log::info('Employee IDs: ' . $employees->pluck('id')->toJson());
+    
     foreach ($employees as $employee) {
 
         $btnShow = '<button class="btn btn-xs btn-default text-info mx-1 shadow view-ticket" 
@@ -83,10 +87,36 @@ class EmployeeController extends Controller
 
         return redirect()->route('HR.manage_employee.employee')->with('success', 'Employee created successfully!');
     }
-public function show($id)
-{
-    $employee = Employee::findOrFail($id);  // Find employee by ID
-    return response()->json($employee);  // Return employee data as JSON
+    public function show($id)
+    {
+        try {
+            \Log::info('Employee show method called', ['id' => $id, 'type' => gettype($id)]);
+            
+            // Debug: Check if employee exists
+            $employeeExists = Employee::where('id', $id)->exists();
+            \Log::info('Employee exists check', ['id' => $id, 'exists' => $employeeExists]);
+            
+            // Debug: List all employee IDs
+            $allEmployeeIds = Employee::pluck('id')->toArray();
+            \Log::info('All employee IDs in database', ['ids' => $allEmployeeIds]);
+            
+            $employee = Employee::findOrFail($id);  // Find employee by ID
+        
+        \Log::info('Employee found', ['employee' => $employee->toArray()]);
+        
+        return response()->json($employee);  // Return employee data as JSON
+    } catch (\Exception $e) {
+        \Log::error('Error in employee show method', [
+            'id' => $id,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return response()->json([
+            'error' => 'Employee not found',
+            'message' => $e->getMessage()
+        ], 404);
+    }
 }
 
 public function edit($id)
@@ -124,5 +154,23 @@ public function update(Request $request, $id)
 public function attendance()
 {
     return view('HR.manage_employee.attendance');
+}
+
+public function destroy($id)
+{
+    try {
+        $employee = Employee::findOrFail($id);
+        $employee->delete();
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Employee deleted successfully!'
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to delete employee: ' . $e->getMessage()
+        ], 500);
+    }
 }
 }
